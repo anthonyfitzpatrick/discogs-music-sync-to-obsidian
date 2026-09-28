@@ -1,10 +1,10 @@
-# Music Library Sync User Guide
+# Discogs music sync and Dashboard User Guide
 
-Music Library Sync (repository: *Discogs Music Sync to Obsidian*) turns your Discogs collection into a music library inside your Obsidian vault. This guide explains how to set it up and how to use each part of it.
+Discogs music sync and Dashboard (repository: *Discogs Music Sync to Obsidian*, plugin ID `music-library-sync`) turns your Discogs collection into a music library inside your Obsidian vault. This guide explains how to set it up and how to use each part of it.
 
 ## Contents
 
-1. [About Music Library Sync](#1-about-music-library-sync)
+1. [About Discogs music sync and Dashboard](#1-about-music-library-sync)
 2. [Requirements](#2-requirements)
 3. [Installation](#3-installation)
 4. [First-time setup](#4-first-time-setup)
@@ -23,9 +23,9 @@ Music Library Sync (repository: *Discogs Music Sync to Obsidian*) turns your Dis
 17. [Frequently asked questions](#17-frequently-asked-questions)
 18. [Getting help](#18-getting-help)
 
-## 1. About Music Library Sync
+## 1. About Discogs music sync and Dashboard
 
-Discogs is where you catalogue the records you own. Music Library Sync brings that catalogue into Obsidian, where you can annotate it, link it and see it at a glance.
+Discogs is where you catalogue the records you own. Discogs music sync and Dashboard brings that catalogue into Obsidian, where you can annotate it, link it and see it at a glance.
 
 For every record in your Discogs collection, the plugin creates a note with:
 
@@ -67,7 +67,7 @@ Without Dataview and Charts, syncing still works; only the dashboard is affected
    - `styles.css`
    - `dashboard-template.md`
 4. Open **Settings → Community plugins**. If Restricted mode is on, turn it off.
-5. Reload the list of installed plugins and turn on **Music Library Sync**.
+5. Reload the list of installed plugins and turn on **Discogs music sync and Dashboard**.
 
 To update the plugin, replace the four files and turn the plugin off and on again (or restart Obsidian).
 
@@ -89,7 +89,7 @@ The token gives read access to your account. Treat it like a password.
 
 ### 4.3 Enter them in Obsidian
 
-1. Open **Settings → Music Library Sync**.
+1. Open **Settings → Discogs music sync and Dashboard**.
 2. Under **Discogs**, type your Discogs **Username**.
 3. Paste your Discogs token into **Personal access token** and press Enter or click elsewhere. The description changes to "A token is saved."
 4. Press **Test**. You should see "Connected as *your name*".
@@ -97,7 +97,7 @@ The token gives read access to your account. Treat it like a password.
 
 ### 4.4 Check your bases
 
-In Discogs, your collection can be split into folders. Music Library Sync syncs one Discogs folder into each base. The defaults are:
+In Discogs, your collection can be split into folders. Discogs music sync and Dashboard syncs one Discogs folder into each base. The defaults are:
 
 | Base | Discogs folder | Vault folder | Tag |
 |---|---|---|---|
@@ -109,7 +109,7 @@ If your Discogs folders have different names, edit each base (see [6.3](#63-edit
 
 ### 4.5 Run the first sync
 
-Press the disc icon in the ribbon, or run **Music Library Sync: Sync from Discogs** from the command palette.
+Press the disc icon in the ribbon, or run **Discogs music sync and Dashboard: Sync from Discogs** from the command palette.
 
 The first sync can take a while. Discogs allows about one request a second, and each record needs several requests: the release, its master, prices, cover and photos. Expect roughly 5 to 15 seconds per record, plus time for Genius lookups. A collection of 150 records takes about half an hour. Later syncs only fetch new records, so they are quick.
 
@@ -117,7 +117,7 @@ You can keep working in Obsidian while it runs. To follow progress, add the sync
 
 ## 5. The settings page
 
-Open **Settings → Music Library Sync**. Changes are saved as you make them and apply from the next sync.
+Open **Settings → Discogs music sync and Dashboard**. Changes are saved as you make them and apply from the next sync.
 
 ### 5.1 Discogs
 
@@ -185,7 +185,7 @@ Every `.base` file has these views:
 
 Say you've started collecting MiniDiscs and made a **MiniDisc** folder in your Discogs collection.
 
-1. Open **Settings → Music Library Sync** and press **Add base**, or run **Music Library Sync: Add a base…**.
+1. Open **Settings → Discogs music sync and Dashboard** and press **Add base**, or run **Discogs music sync and Dashboard: Add a base…**.
 2. Enter a **Name**, for example `MiniDiscs`. This becomes the folder name, the `.base` file name and the name on the dashboard.
 3. Enter the **Discogs folder** to sync, for example `MiniDisc`. Leave it empty if the Discogs folder has the same name. The description lists your Discogs folders.
 4. Choose an **Icon**. It is shown in the settings list and in the sync progress.
@@ -476,7 +476,7 @@ Files and folders starting with a dot are hidden in Obsidian's file explorer.
 ## 16. Troubleshooting
 
 **"Missing Music/.discogs-token"**
-No Discogs token is saved. Paste it in **Settings → Music Library Sync → Personal access token**.
+No Discogs token is saved. Paste it in **Settings → Discogs music sync and Dashboard → Personal access token**.
 
 **"No Discogs folder called "…" — skipped"**
 A base's Discogs folder doesn't match any folder in your Discogs collection. Folder names must match exactly, including capitals. Edit the base; the dialog lists your Discogs folders.
@@ -542,9 +542,9 @@ No. The plugin is desktop only.
 
 ## 18. Getting help
 
-At the bottom of **Settings → Music Library Sync**:
+At the bottom of **Settings → Discogs music sync and Dashboard**:
 
 - **Report a bug** opens a bug report on GitHub, labelled `bug`. Include the plugin version (shown at the bottom of the settings page), what you did, what happened, and the relevant lines from the **Sync log**. Remove any tokens first.
 - **Request a feature** opens a feature request, labelled `enhancement`.
 
-Music Library Sync is created by Anthony Fitzpatrick, Wolf 359 Press AB.
+Discogs music sync and Dashboard is created by Anthony Fitzpatrick, Wolf 359 Press AB.

@@ -1,7 +1,7 @@
 {
   "id": "music-library-sync",
-  "name": "Music Library Sync",
-  "version": "0.8.1",
+  "name": "Discogs music sync and Dashboard",
+  "version": "0.8.2",
   "minAppVersion": "1.4.0",
   "description": "Sync folders from your Discogs collection into Obsidian album notes (covers, tracklists, Genius lyrics links, prices), one base per folder, and rebuild the Music Dashboard. Pure JavaScript, no Python needed.",
   "author": "Wolf 359 Press",

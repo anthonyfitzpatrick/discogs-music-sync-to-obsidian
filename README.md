@@ -1,8 +1,8 @@
-# Discogs Music Sync to Obsidian
+# Discogs music sync and Dashboard
 
 An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, a `.base` view for each collection, and a live Music Dashboard.
 
-The plugin's name in Obsidian is **Music Library Sync**.
+The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its folder in `.obsidian/plugins/`, is `music-library-sync`.
 
 ## Features
 
@@ -28,14 +28,14 @@ No Python or other tools are needed. The plugin is plain JavaScript with no buil
 
 1. Create the folder `<your vault>/.obsidian/plugins/music-library-sync/`.
 2. Copy `main.js`, `manifest.json`, `styles.css` and `dashboard-template.md` from this repository into it.
-3. In Obsidian, open **Settings → Community plugins**, reload the list and enable **Music Library Sync**.
+3. In Obsidian, open **Settings → Community plugins**, reload the list and enable **Discogs music sync and Dashboard**.
 
 ## Quick start
 
-1. Open **Settings → Music Library Sync**.
+1. Open **Settings → Discogs music sync and Dashboard**.
 2. Enter your Discogs username, paste your personal access token and press **Test**.
 3. Check that the three default bases (Vinyl, CDs and Tapes) point at the right Discogs folders, or add your own.
-4. Run **Music library: sync from Discogs** from the ribbon disc icon or the command palette.
+4. Press the disc icon in the ribbon, or run **Sync from Discogs** from the command palette.
 5. Open `Music/Music Dashboard.md`.
 
 The [User Guide](User%20Guide.md) covers every feature and setting in detail.

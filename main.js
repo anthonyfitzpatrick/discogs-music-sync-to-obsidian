@@ -1,4 +1,4 @@
-/* Music Library Sync v0.8 — private Wolf 359 Press plugin.
+/* Discogs music sync and Dashboard v0.8 — private Wolf 359 Press plugin.
    Pure JavaScript: talks to Discogs + Genius with Obsidian's requestUrl and writes notes
    through the vault adapter. No Python required.
    Safety: never overwrites an existing album note (except price fields on "Refresh prices")
@@ -9,7 +9,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const MUSIC = "Music";
 const DASHBOARD = "Music/Music Dashboard.md";
 const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.8.1";
+const VERSION = "0.8.2";
 const UA = "Wolf359MusicLibrarySync/0.8";
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
@@ -508,7 +508,7 @@ class MusicLibrarySync extends Plugin {
     this.state = { running: false, mode: null, steps: {}, now: "", log: "", progress: 0 };
     this.panels = new Set();
     this.registerMarkdownCodeBlockProcessor("music-sync", (_src, el) => this.renderPanel(el));
-    this.addRibbonIcon("disc-3", "Music library: sync from Discogs", () => this.run("sync"));
+    this.addRibbonIcon("disc-3", "Discogs music sync and Dashboard: sync from Discogs", () => this.run("sync"));
     this.addCommand({ id: "sync", name: "Sync from Discogs", callback: () => this.run("sync") });
     this.addCommand({ id: "prices", name: "Refresh prices", callback: () => this.run("prices") });
     this.addCommand({ id: "dashboard", name: "Rebuild dashboard", callback: () => this.run("dashboard") });
@@ -738,7 +738,7 @@ class MusicLibrarySync extends Plugin {
     const top = p.root.createDiv({ cls: "mls-top" });
     const badge = top.createDiv({ cls: "mls-badge" }); setIcon(badge, "disc-3");
     const txt = top.createDiv({ cls: "mls-text" });
-    const tt = txt.createDiv({ cls: "mls-title", text: "Music Library " }); tt.createSpan({ cls: "mls-ver", text: `v${VERSION}` });
+    const tt = txt.createDiv({ cls: "mls-title", text: "Discogs music sync and Dashboard " }); tt.createSpan({ cls: "mls-ver", text: `v${VERSION}` });
     p.meta = txt.createDiv({ cls: "mls-meta" });
     const act = p.root.createDiv({ cls: "mls-actions" });
     const btn = (label, ic, cls, fn, tip) => {
@@ -828,7 +828,7 @@ class MusicLibrarySync extends Plugin {
       window.musicLibrarySyncRunning = false;
       this.refresh();
       window.setTimeout(() => { s.justDone = false; this.refresh(); }, 5000);
-      new Notice(`Music Library: ${summary}`, 7000);
+      new Notice(`Discogs music sync and Dashboard: ${summary}`, 7000);
     }
   }
 }
@@ -958,9 +958,9 @@ class MusicSettingTab extends PluginSettingTab {
   aboutFooter(el) {
     const footer = el.createDiv("mls-about-footer");
     const identity = footer.createDiv("mls-about-identity");
-    setIcon(identity.createDiv({ cls: "mls-about-logo", attr: { "aria-label": "Music Library Sync logo", role: "img" } }), "disc-3");
+    setIcon(identity.createDiv({ cls: "mls-about-logo", attr: { "aria-label": "Discogs music sync and Dashboard logo", role: "img" } }), "disc-3");
     const text = identity.createDiv("mls-about-identity-text");
-    text.createDiv({ cls: "mls-about-title", text: "Music Library Sync" });
+    text.createDiv({ cls: "mls-about-title", text: "Discogs music sync and Dashboard" });
     text.createDiv({ cls: "mls-about-version", text: `Version ${this.plugin.manifest.version}` });
     text.createDiv({ cls: "mls-about-credit", text: "Created by Anthony Fitzpatrick" });
     text.createDiv({ cls: "mls-about-credit", text: "Wolf 359 Press AB" });

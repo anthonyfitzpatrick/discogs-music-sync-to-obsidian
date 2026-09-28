@@ -1,4 +1,4 @@
-/* Music Library Sync — control panel, coloured by the active theme */
+/* Discogs music sync and Dashboard — control panel, coloured by the active theme */
 .mls-panel {
   position: relative;
   background: var(--background-secondary);
