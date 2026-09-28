@@ -1,5 +1,9 @@
 # Per-vault settings and run history, written by Obsidian
 data.json
 
+# Built from src/ by `npm run build`; attached to GitHub releases instead
+main.js
+
+node_modules/
 .DS_Store
 Icon?

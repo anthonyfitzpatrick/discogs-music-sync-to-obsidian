@@ -1,0 +1,15 @@
+{
+  "name": "discogs-music-sync-to-obsidian",
+  "version": "0.9.0",
+  "description": "Discogs music sync and dashboard: an Obsidian plugin that syncs a Discogs collection into album notes, bases and a Music Dashboard.",
+  "private": true,
+  "license": "MIT",
+  "author": "Anthony Fitzpatrick",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "test": "npm run build && node --test \"tests/*.test.js\""
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

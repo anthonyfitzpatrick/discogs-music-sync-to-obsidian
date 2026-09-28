@@ -48,7 +48,7 @@ The plugin is careful with your notes:
 
 | Requirement | Why |
 |---|---|
-| Obsidian 1.4 or later, on desktop (macOS, Windows or Linux) | The plugin and its PDF export run on desktop only. |
+| Obsidian 1.9 or later, on desktop (macOS, Windows or Linux) | The `.base` views need Obsidian's Bases feature, and the plugin and its PDF export run on desktop only. |
 | A Discogs account with your records in your collection | This is where the records come from. |
 | A Discogs personal access token | Lets the plugin read your collection and prices. |
 | The **Dataview** community plugin, with **Enable JavaScript Queries** turned on | Draws the Music Dashboard. |
@@ -59,17 +59,25 @@ Without Dataview and Charts, syncing still works; only the dashboard is affected
 
 ## 3. Installation
 
-1. Close Obsidian, or be ready to reload its plugin list.
-2. Create the folder `<your vault>/.obsidian/plugins/music-library-sync/`.
-3. Copy these four files into it:
-   - `main.js`
-   - `manifest.json`
-   - `styles.css`
-   - `dashboard-template.md`
-4. Open **Settings → Community plugins**. If Restricted mode is on, turn it off.
-5. Reload the list of installed plugins and turn on **Discogs music sync and dashboard**.
+### 3.1 From a release
 
-To update the plugin, replace the four files and turn the plugin off and on again (or restart Obsidian).
+1. Open the [latest release](https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian/releases/latest) and download `main.js`, `manifest.json` and `styles.css`.
+2. Create the folder `<your vault>/.obsidian/plugins/music-library-sync/` and put the three files in it.
+3. Open **Settings → Community plugins**. If Restricted mode is on, turn it off.
+4. Reload the list of installed plugins and turn on **Discogs music sync and dashboard**.
+
+To update, replace the three files with those from the newer release and turn the plugin off and on again (or restart Obsidian).
+
+### 3.2 With BRAT
+
+BRAT is a community plugin for installing plugins that aren't in the community list yet, and keeping them updated.
+
+1. Install and enable **BRAT** from **Settings → Community plugins → Browse**.
+2. Run **BRAT: Add a beta plugin for testing** from the command palette.
+3. Enter `anthonyfitzpatrick/discogs-music-sync-to-obsidian` and confirm.
+4. Turn on **Discogs music sync and dashboard** in **Settings → Community plugins**.
+
+BRAT checks for new releases when Obsidian starts.
 
 ## 4. First-time setup
 
@@ -89,25 +97,27 @@ The token gives read access to your account. Treat it like a password.
 
 ### 4.3 Enter them in Obsidian
 
-1. Open **Settings → Discogs music sync and dashboard**.
+1. Open **Settings → Discogs music sync and dashboard**. Until setup is done, the top of the page shows a **Getting started** list, and ticks off each step as you finish it.
 2. Under **Discogs**, type your Discogs **Username**.
 3. Paste your Discogs token into **Personal access token** and press Enter or click elsewhere. The description changes to "A token is saved."
 4. Press **Test**. You should see "Connected as *your name*".
 5. Under **Lyrics**, paste your Genius token into **Genius access token** and press **Test**.
 
-### 4.4 Check your bases
+### 4.4 Set up your bases
 
-In Discogs, your collection can be split into folders. Discogs music sync and dashboard syncs one Discogs folder into each base. The defaults are:
+In Discogs, your collection can be split into folders, such as Vinyl, CD and Cassette. The plugin syncs each Discogs folder you choose into its own base.
 
-| Base | Discogs folder | Vault folder | Tag |
-|---|---|---|---|
-| Vinyl | Vinyl | `Music/Vinyl` | `#vinyl-library` |
-| CDs | CD | `Music/CDs` | `#cd-library` |
-| Tapes | Cassette | `Music/Tapes` | `#tape-library` |
+1. Under **Bases**, press **Set up from Discogs**. The button works once your username and token are saved.
+2. The dialog lists the folders in your Discogs collection. Every folder is ticked except **Uncategorized** (records you haven't put in a folder). Untick any you don't want.
+3. Press **Add bases**.
 
-If your Discogs folders have different names, edit each base (see [6.3](#63-editing-and-renaming-a-base)) and set its **Discogs folder** to match. The edit dialog lists the folders in your Discogs collection.
+Each ticked folder becomes a base with the folder's name, for example a `Vinyl` folder becomes `Music/Vinyl/`, `Music/Vinyl.base` and the tag `#vinyl-library`, with an icon to match. You can rename bases afterwards (see [6.3](#63-editing-and-renaming-a-base)), or add more with **Add base** (see [6.2](#62-adding-a-base)).
 
-### 4.5 Run the first sync
+### 4.5 Check the dashboard plugins
+
+Under **Dashboard**, the settings page says whether the plugins the Music Dashboard needs are ready: Dataview, with **Enable JavaScript Queries** turned on, and Charts. If something is missing, it says what to install or turn on.
+
+### 4.6 Run the first sync
 
 Run **Discogs music sync and dashboard: Sync from Discogs** from the command palette. (The disc icon in the ribbon opens the Music Dashboard, which has a **Sync from Discogs** button at the top.)
 
@@ -140,22 +150,27 @@ Lists every base with its icon, name, Discogs folder, vault folder and tag.
 
 - The **pencil** button edits or renames the base.
 - The **bin** button stops syncing it.
-- **Add base** creates a new one.
+- **Set up from Discogs** adds bases for Discogs folders that don't have one yet.
+- **Add base** creates a new one by hand.
 
 See [section 6](#6-bases).
 
-### 5.4 Sync
+### 5.4 Dashboard
+
+Says whether Dataview (with JavaScript queries) and Charts are enabled, and what to do if not, with a button to open the Music Dashboard.
+
+### 5.5 Sync
 
 - **Download all images**: when on, every Discogs photo of a new record is saved and shown under **Images** in its note. When off, only the front cover is downloaded, which makes syncing faster and uses less space.
 
-### 5.5 PDF export
+### 5.6 PDF export
 
 - **Paper size**: A5, A4, A3, Letter, Legal or Tabloid.
 - **Orientation**: Portrait or Landscape.
 
 These are the defaults for the export dialog. Whatever you pick in the dialog is also remembered here.
 
-### 5.6 About
+### 5.7 About
 
 The bottom of the page shows the plugin's version, and buttons to report a bug, request a feature, and visit the author's and Wolf 359 Press's websites. See [section 18](#18-getting-help).
 
@@ -192,7 +207,9 @@ Say you've started collecting MiniDiscs and made a **MiniDisc** folder in your D
 5. The dialog shows what it will create, for example: *Creates Music/MiniDiscs/, Music/MiniDiscs.base and the tag #minidiscs-library.*
 6. Press **Add base**.
 
-The folder and `.base` file are created straight away. The next sync fills the base with records.
+The folder and `.base` file are created straight away, and the base's tag is added to `Music/All Media.base` (which is created if it doesn't exist). The next sync fills the base with records.
+
+If a base's folder or `.base` file goes missing later, the next sync creates it again. Files that exist are never changed, so your own edits to a `.base` file are kept.
 
 ### 6.3 Editing and renaming a base
 
@@ -219,7 +236,7 @@ Press the bin next to a base and confirm. The base stops syncing and disappears 
 
 Its folder, notes and `.base` file stay in your vault, and its tag stays in `All Media.base`. Delete them yourself if you no longer want them. Because the folder still exists, you can't add a new base with the same name until you rename or delete it.
 
-You can't remove the last base.
+You can remove every base. The dashboard then says there are no bases to show, and a sync asks you to add one.
 
 ## 7. Syncing from Discogs
 
@@ -370,7 +387,7 @@ The panel takes its colours from your Obsidian theme.
 
 `Music/Music Dashboard.md` is a live page. It reads your record notes every time you open it, so it is always up to date. It needs the Dataview and Charts plugins.
 
-**Rebuild dashboard** writes the page from the plugin's `dashboard-template.md` and fetches your collection's total value from Discogs. Every sync and price refresh also does this. Any edits you make to `Music Dashboard.md` are replaced at the next rebuild, so leave the page as it is. To change the dashboard, edit `dashboard-template.md` in the plugin folder.
+**Rebuild dashboard** writes the page from the template built into the plugin and fetches your collection's total value from Discogs. Every sync and price refresh also does this. Any edits you make to `Music Dashboard.md` are replaced at the next rebuild, so leave the page as it is. The template's source is `src/dashboard-template.md` in the repository.
 
 ### 11.1 Overview
 
@@ -455,8 +472,8 @@ The ribbon's disc icon runs **Open dashboard**: it switches to the Music Dashboa
 | `Music/.discogs-token`, `Music/.genius-token` | Your tokens |
 | `Music/.vinyl-sync/collection-value.json` | Discogs' value for your collection, fetched at each rebuild |
 | `Music/.vinyl-sync/last-export.html` | The page behind the last PDF export, kept for troubleshooting |
+| `.obsidian/plugins/music-library-sync/` | The plugin: `main.js`, `manifest.json` and `styles.css` |
 | `.obsidian/plugins/music-library-sync/data.json` | Your settings and bases, and the result of the last run |
-| `.obsidian/plugins/music-library-sync/dashboard-template.md` | The template the dashboard is built from |
 
 Files and folders starting with a dot are hidden in Obsidian's file explorer.
 
@@ -476,8 +493,11 @@ Files and folders starting with a dot are hidden in Obsidian's file explorer.
 
 ## 16. Troubleshooting
 
-**"Missing Music/.discogs-token"**
-No Discogs token is saved. Paste it in **Settings → Discogs music sync and dashboard → Personal access token**.
+**"Enter your Discogs username…", "Save your Discogs token…" or "Add a base… first"**
+Setup isn't finished. Open **Settings → Discogs music sync and dashboard** and follow the **Getting started** list.
+
+**"Couldn't read your Discogs folders"**
+Shown by **Set up from Discogs**. Check your username and token with **Test**, then try again.
 
 **"No Discogs folder called "…" — skipped"**
 A base's Discogs folder doesn't match any folder in your Discogs collection. Folder names must match exactly, including capitals. Edit the base; the dialog lists your Discogs folders.
@@ -498,7 +518,13 @@ See [section 9](#9-prices). Fill in your Discogs Seller Settings and run **Refre
 Open **Sync log** on the panel. Each error names the base or step that failed. Other bases still sync.
 
 **The dashboard shows code or "Enable the Charts plugin to see this chart."**
-Install and enable Dataview (with **Enable JavaScript Queries** turned on in its settings) and Charts, then reopen the dashboard.
+Install and enable Dataview (with **Enable JavaScript Queries** turned on in its settings) and Charts, then reopen the dashboard. The **Dashboard** section of the plugin's settings says which is missing.
+
+**"No bases to show yet"**
+Add a base (see [4.4](#44-set-up-your-bases)), then run **Sync from Discogs**.
+
+**"PDF export isn't available in this version of Obsidian"**
+PDF export relies on a part of Obsidian's desktop app that some versions don't provide. Please report it with **Report a bug**, including your Obsidian version.
 
 **The dashboard is empty**
 It waits up to 20 seconds for Dataview to index your notes after Obsidian starts. If it is still empty, check that your record notes have their base's tag, then reopen the dashboard.

@@ -1,0 +1,39 @@
+name: Release
+
+# Builds the plugin from a pushed version tag (for example 0.9.0) and attaches the three
+# files Obsidian and BRAT install: main.js, manifest.json and styles.css.
+on:
+  push:
+    tags:
+      - "[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+
+      - name: Check the tag matches manifest.json and versions.json
+        run: |
+          manifest=$(node -p "require('./manifest.json').version")
+          if [ "$manifest" != "$GITHUB_REF_NAME" ]; then
+            echo "manifest.json is $manifest but the tag is $GITHUB_REF_NAME" >&2; exit 1
+          fi
+          node -e "if (!require('./versions.json')[process.argv[1]]) { console.error('versions.json has no entry for ' + process.argv[1]); process.exit(1) }" "$GITHUB_REF_NAME"
+
+      - run: npm test
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" main.js manifest.json styles.css \
+            --title "$GITHUB_REF_NAME" --generate-notes

@@ -6,9 +6,9 @@
 ```dataviewjs
 // ───────────────────────── Music Dashboard (live: Dataview + Charts) ─────────────────────────
 // Generated from dashboard-template.md in the Discogs music sync and dashboard plugin — edit the template, not this note.
-// The bases come from the Discogs music sync and dashboard settings; the original three if the plugin is off.
-const LIBS = app.plugins.plugins["music-library-sync"]?.libraries?.() ||
-  [{ name: "Vinyl", tag: "vinyl-library" }, { name: "CDs", tag: "cd-library" }, { name: "Tapes", tag: "tape-library" }];
+// The bases come from the plugin's settings.
+const LIBS = app.plugins.plugins["music-library-sync"]?.libraries?.() ?? [];
+if (!LIBS.length) { dv.paragraph("No bases to show yet. Open Settings → Discogs music sync and dashboard, add a base, then run Sync from Discogs."); return; }
 const TAGS = Object.fromEntries(LIBS.map((l) => [`#${l.tag}`, l.name]));
 const MEDIA = LIBS.map((l) => l.name);
 // Every colour comes from the active theme's CSS variables, read when the note renders, so the

@@ -17,7 +17,7 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 
 ## Requirements
 
-- Obsidian 1.4 or later, desktop only (macOS, Windows or Linux).
+- Obsidian 1.9 or later (for Bases), desktop only (macOS, Windows or Linux).
 - A Discogs account and a personal access token.
 - For the dashboard: the **Dataview** community plugin (with JavaScript queries enabled) and the **Charts** community plugin.
 - Optional: a Genius API access token, for lyrics links.
@@ -26,15 +26,15 @@ No Python or other tools are needed. The plugin is plain JavaScript with no buil
 
 ## Installation
 
-1. Create the folder `<your vault>/.obsidian/plugins/music-library-sync/`.
-2. Copy `main.js`, `manifest.json`, `styles.css` and `dashboard-template.md` from this repository into it.
-3. In Obsidian, open **Settings → Community plugins**, reload the list and enable **Discogs music sync and dashboard**.
+**From a release.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian/releases/latest), put them in `<your vault>/.obsidian/plugins/music-library-sync/`, then enable **Discogs music sync and dashboard** in **Settings → Community plugins**.
+
+**With BRAT** (for beta testing). Install the BRAT community plugin, choose **Add beta plugin**, and enter `anthonyfitzpatrick/discogs-music-sync-to-obsidian`. BRAT installs the latest release and keeps it updated.
 
 ## Quick start
 
 1. Open **Settings → Discogs music sync and dashboard**.
 2. Enter your Discogs username, paste your personal access token and press **Test**.
-3. Check that the three default bases (Vinyl, CDs and Tapes) point at the right Discogs folders, or add your own.
+3. Under **Bases**, press **Set up from Discogs** and tick the Discogs folders to sync.
 4. Run **Sync from Discogs** from the command palette.
 5. Press the disc icon in the ribbon to open the Music Dashboard.
 
@@ -57,6 +57,17 @@ The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 ## Feedback
 
 Use **Report a bug** or **Request a feature** at the bottom of the plugin's settings page. They open this repository's issue forms, which label the issue `bug` or `enhancement` automatically.
+
+## Development
+
+The source is in `src/`. `npm run build` bundles it, with the dashboard template, into `main.js`; `npm test` builds and runs the tests in `tests/`.
+
+```
+npm install
+npm test
+```
+
+To release, set the same version in `manifest.json`, `package.json` and `versions.json`, commit, and push a tag with that version (for example `0.9.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`.
 
 ## License
 

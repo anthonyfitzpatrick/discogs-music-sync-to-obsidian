@@ -304,3 +304,53 @@
 .mls-about-logo svg { width: 28px; height: 28px; }
 .mls-about-link:disabled { opacity: .55; cursor: default; }
 .mls-about-link:disabled:hover { background: var(--background-primary); border-color: var(--background-modifier-border); color: var(--text-muted); }
+
+/* v0.9: first-run guidance in settings */
+.mls-getting-started { background: var(--background-secondary); border: 1px solid var(--background-modifier-border);
+  border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; }
+.mls-getting-started ol { margin: 6px 0 0; padding-left: 1.4em; }
+.mls-getting-started li { margin: 2px 0; }
+.mls-getting-started li.is-done { color: var(--text-muted); text-decoration: line-through; }
+
+/* Record notes (cssclasses: vinyl-record): Properties sit below the note, not above it.
+   The data stays in the frontmatter, so the .base views keep working. */
+/* Editing / Live Preview */
+.vinyl-record.markdown-source-view .cm-sizer {
+  display: flex;
+  flex-direction: column;
+}
+.vinyl-record.markdown-source-view .cm-sizer > .inline-title       { order: 0; }
+.vinyl-record.markdown-source-view .cm-sizer > .cm-contentContainer {
+  order: 1;
+  flex: 0 0 auto;          /* only as tall as the text needs */
+  min-height: 0 !important;
+}
+.vinyl-record.markdown-source-view .cm-content { padding-bottom: 0 !important; }
+.vinyl-record.markdown-source-view .cm-sizer > .metadata-container  {
+  order: 2;
+  margin-top: 1em;
+  padding-top: 0.75em;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.vinyl-record.markdown-source-view .cm-sizer > :not(.inline-title):not(.cm-contentContainer):not(.metadata-container) { order: 3; }
+
+/* Reading view: move the header block (properties) below the content.
+   The note's own "# Artist – Album" heading serves as the title there. */
+.vinyl-record.markdown-preview-view .markdown-preview-sizer {
+  display: flex;
+  flex-direction: column;
+}
+.vinyl-record.markdown-preview-view .markdown-preview-sizer > .markdown-preview-pusher { order: 0; }
+.vinyl-record.markdown-preview-view .markdown-preview-sizer > div { order: 1; }
+.vinyl-record.markdown-preview-view .markdown-preview-sizer > .mod-header {
+  order: 2;
+  margin-top: 1em;
+  padding-top: 0.75em;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.vinyl-record.markdown-preview-view .mod-header .inline-title { display: none; }
+.vinyl-record.markdown-preview-view .markdown-preview-sizer > .mod-footer { order: 3; }
+
+/* Keep the Notes heading compact when the section is empty */
+.vinyl-record .markdown-preview-sizer > div:has(> h2[data-heading="Notes"]):last-of-type h2,
+.vinyl-record h2[data-heading="Notes"] { margin-bottom: 0.25em; }

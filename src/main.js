@@ -1,4 +1,4 @@
-/* Discogs music sync and dashboard v0.8 — private Wolf 359 Press plugin.
+/* Discogs music sync and dashboard (plugin ID music-library-sync) — Wolf 359 Press.
    Pure JavaScript: talks to Discogs + Genius with Obsidian's requestUrl and writes notes
    through the vault adapter. No Python required.
    Safety: never overwrites an existing album note (except price fields on "Refresh prices")
@@ -9,18 +9,22 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const MUSIC = "Music";
 const DASHBOARD = "Music/Music Dashboard.md";
 const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.8.4";
+const VERSION = "0.9.0";
+// Bundled as text by esbuild (see esbuild.config.mjs), so the dashboard ships inside main.js.
+const DASHBOARD_TEMPLATE = require("./dashboard-template.md");
 const UA = "Wolf359MusicLibrarySync/0.8";
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
 // A "base" (library) is one Discogs collection folder synced into its own vault folder, with its
-// own tag, its own .base view and its own place on the dashboard. These are the original three.
-const DEFAULT_LIBRARIES = [
+// own tag, its own .base view and its own place on the dashboard. A new install starts with none and
+// sets them up from the user's Discogs folders; these three are for installs from before 0.8, whose
+// settings predate the list of bases.
+const LEGACY_LIBRARIES = [
   { id: "vinyl", name: "Vinyl", discogsFolder: "Vinyl",    dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3",        base: "Music/Vinyl.base" },
   { id: "cds",   name: "CDs",   discogsFolder: "CD",       dir: "Music/CDs",   tag: "cd-library",    icon: "disc",          base: "Music/CDs.base" },
   { id: "tapes", name: "Tapes", discogsFolder: "Cassette", dir: "Music/Tapes", tag: "tape-library",  icon: "cassette-tape", base: "Music/Tapes.base" },
 ];
-const DEFAULTS = { last: null, username: "discogs-user", lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" } };
+const DEFAULTS = { last: null, username: "", lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" } };
 const ICONS = ["disc-3", "disc", "disc-2", "cassette-tape", "album", "music", "music-2", "radio", "headphones", "library", "guitar", "piano"];
 const PRICE_KEYS = ["price_low_sek", "price_mid_sek", "price_high_sek", "price_max_sek", "price_my_copy_sek", "market_lowest_sek", "market_for_sale", "price_checked"];
 const GRADE = { low: "Good Plus (G+)", mid: "Very Good Plus (VG+)", high: "Near Mint (NM or M-)" };
@@ -76,7 +80,7 @@ class Engine {
   // cfg: { username, lyrics, gallery, libraries } — a snapshot of the settings for this run
   constructor(adapter, log, isCancelled, cfg) {
     this.fs = adapter; this.log = log; this.isCancelled = isCancelled || (() => false);
-    this.cfg = Object.assign({ username: DEFAULTS.username, lyrics: true, gallery: true, libraries: DEFAULT_LIBRARIES, template: "" }, cfg);
+    this.cfg = Object.assign({ username: "", lyrics: true, gallery: true, libraries: [], template: DASHBOARD_TEMPLATE }, cfg);
     this.last = { discogs: 0, genius: 0 };
     this.noSuggest = false;
   }
@@ -339,8 +343,7 @@ class Engine {
 
   /* ---- dashboard: live Dataview + Charts note built from the template shipped with the plugin ---- */
   async dashboard(outPath = DASHBOARD) {
-    const tplPath = this.cfg.template;
-    if (!(await this.fs.exists(tplPath))) throw new Error(`Missing ${tplPath}`);
+    await this.ensureDir(`${MUSIC}/.vinyl-sync`);
     let v = {};
     try {
       const r = await this.discogs(`users/${this.cfg.username}/collection/value`);
@@ -349,7 +352,7 @@ class Engine {
     } catch (e) { this.log(`  collection value: ${e.message}`); }
     if (v.MED) await this.fs.write(`${MUSIC}/.vinyl-sync/collection-value.json`, JSON.stringify(
       { discogs_value_min: v.MIN, discogs_value_median: v.MED, discogs_value_max: v.MAX, checked: v.CHECKED }));
-    const text = await this.fs.read(tplPath);
+    const text = this.cfg.template;
     if (!(await this.fs.exists(outPath)) || (await this.fs.read(outPath)) !== text) await this.fs.write(outPath, text);
     this.log(`Dashboard rebuilt${v.MED ? ` (Discogs median ${v.MED} kr)` : ""}`);
   }
@@ -500,11 +503,83 @@ views:
     imageAspectRatio: 1
 `;
 
+// All Media.base, for a vault that doesn't have one yet: every base together.
+const allMediaYaml = (tags) => `filters:
+  or:
+${tags.map((t) => `    - file.hasTag(${JSON.stringify(t)})`).join("\n")}
+properties:
+  note.artist:
+    displayName: Artist
+  note.title:
+    displayName: Album
+  note.media:
+    displayName: Media
+  note.original_year:
+    displayName: Year
+  note.market_lowest_sek:
+    displayName: Lowest listing (kr)
+views:
+  - type: cards
+    name: Everything
+    groupBy:
+      property: media
+      direction: DESC
+    order:
+      - title
+      - artist
+      - original_year
+    sort:
+      - property: artist
+        direction: ASC
+    image: note.cover
+    imageFit: cover
+    imageAspectRatio: 1
+  - type: table
+    name: All records
+    order:
+      - media
+      - artist
+      - title
+      - original_year
+      - genres
+      - label
+      - catno
+      - shop
+      - purchased
+      - market_lowest_sek
+    sort:
+      - property: artist
+        direction: ASC
+  - type: table
+    name: Most valuable
+    order:
+      - media
+      - artist
+      - title
+      - market_lowest_sek
+      - price_mid_sek
+    sort:
+      - property: market_lowest_sek
+        direction: DESC
+`;
+
+// A sensible icon for a base named after a Discogs folder.
+const guessIcon = (name) => {
+  const n = name.toLowerCase();
+  if (/cass|tape/.test(n)) return "cassette-tape";
+  if (/vinyl|lp|record|7"|12"|45|78/.test(n)) return "disc-3";
+  if (/\bcds?\b|compact|sacd|minidisc|\bmd\b/.test(n)) return "disc";
+  if (/dvd|blu|video/.test(n)) return "disc-2";
+  return "music";
+};
+
 /* ------------------------------------------------------------------ plugin */
 class MusicLibrarySync extends Plugin {
   async onload() {
-    this.data = Object.assign(structuredClone(DEFAULTS), await this.loadData());
-    if (!Array.isArray(this.data.libraries) || !this.data.libraries.length) this.data.libraries = structuredClone(DEFAULT_LIBRARIES);
+    const saved = await this.loadData();
+    this.data = Object.assign(structuredClone(DEFAULTS), saved);
+    if (!Array.isArray(this.data.libraries)) this.data.libraries = saved ? structuredClone(LEGACY_LIBRARIES) : [];
+    if (saved && saved.username === undefined) this.data.username = "discogs-user";   // pre-0.8 settings were the author's own
     this.state = { running: false, mode: null, steps: {}, now: "", log: "", progress: 0 };
     this.panels = new Set();
     this.registerMarkdownCodeBlockProcessor("music-sync", (_src, el) => this.renderPanel(el));
@@ -560,15 +635,7 @@ class MusicLibrarySync extends Plugin {
     const name = tidy(v.name), s = slug(name);
     let id = s, n = 2; while (this.data.libraries.some((l) => l.id === id)) id = `${s}-${n++}`;
     const lib = { id, name, discogsFolder: tidy(v.discogsFolder) || name, dir: `${MUSIC}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3", base: `${MUSIC}/${name}.base` };
-    const vault = this.app.vault;
-    if (!vault.getAbstractFileByPath(lib.dir)) await vault.createFolder(lib.dir);
-    await vault.create(lib.base, baseYaml(lib.dir, lib.tag));
-    const all = vault.getAbstractFileByPath(ALL_MEDIA_BASE);
-    if (all) await vault.process(all, (t) => {
-      if (t.includes(`file.hasTag("${lib.tag}")`)) return t;
-      const m = [...t.matchAll(/^(\s*)- file\.hasTag\("[^"]*"\)$/gm)].pop();
-      return m ? t.slice(0, m.index + m[0].length) + `\n${m[1]}- file.hasTag("${lib.tag}")` + t.slice(m.index + m[0].length) : t;
-    });
+    await this.ensureLibraryFiles(lib);
     this.data.libraries.push(lib);
     await this.save();
     return lib;
@@ -592,9 +659,46 @@ class MusicLibrarySync extends Plugin {
     await this.save();
   }
 
+  // Creates whatever a base needs and is missing: its folder, its .base file, All Media.base and
+  // its entry there. Never changes a file that exists, apart from adding the entry.
+  async ensureLibraryFiles(lib) {
+    const vault = this.app.vault;
+    if (!vault.getAbstractFileByPath(MUSIC)) await vault.createFolder(MUSIC);
+    if (!vault.getAbstractFileByPath(lib.dir)) await vault.createFolder(lib.dir);
+    if (!(await vault.adapter.exists(lib.base))) await vault.create(lib.base, baseYaml(lib.dir, lib.tag));
+    const all = vault.getAbstractFileByPath(ALL_MEDIA_BASE);
+    if (!all) { if (!(await vault.adapter.exists(ALL_MEDIA_BASE))) await vault.create(ALL_MEDIA_BASE, allMediaYaml([lib.tag])); return; }
+    await vault.process(all, (t) => {
+      if (t.includes(`file.hasTag("${lib.tag}")`)) return t;
+      const m = [...t.matchAll(/^(\s*)- file\.hasTag\("[^"]*"\)$/gm)].pop();
+      return m ? t.slice(0, m.index + m[0].length) + `\n${m[1]}- file.hasTag("${lib.tag}")` + t.slice(m.index + m[0].length) : t;
+    });
+  }
+
+  // Adds a base for each chosen Discogs folder, named after the folder. Returns what was added and
+  // what was skipped, with the reason.
+  async addFromDiscogs(folders) {
+    const added = [], skipped = [];
+    for (const f of folders) {
+      const v = { name: f, discogsFolder: f, icon: guessIcon(f) };
+      const err = await this.checkLibrary(v);
+      if (err) { skipped.push(`${f}: ${err}`); continue; }
+      added.push(await this.addLibrary(v));
+    }
+    return { added, skipped };
+  }
+
+  // What the Music Dashboard needs from other plugins and doesn't have, in plain words.
+  dashboardProblems() {
+    const pl = this.app.plugins, on = (id) => pl?.enabledPlugins?.has(id), out = [];
+    if (!on("dataview")) out.push("Install and enable the Dataview plugin.");
+    else if (pl.plugins?.dataview?.settings?.enableDataviewJs === false) out.push("Turn on “Enable JavaScript Queries” in Dataview's settings.");
+    if (!on("obsidian-charts")) out.push("Install and enable the Charts plugin.");
+    return out;
+  }
+
   // Stops syncing a base. Its folder, notes and .base file are left in the vault.
   async removeLibrary(lib) {
-    if (this.data.libraries.length < 2) throw new Error("Keep at least one base.");
     this.data.libraries = this.data.libraries.filter((l) => l !== lib);
     await this.save();
   }
@@ -656,7 +760,7 @@ class MusicLibrarySync extends Plugin {
   async exportPdf({ size = "A4", orientation = "portrait" } = {}) {
     const electron = require("electron");
     const remote = electron.remote || (() => { try { return require("@electron/remote"); } catch { return null; } })();
-    if (!remote?.BrowserWindow) throw new Error("PDF export needs the Obsidian desktop app");
+    if (!remote?.BrowserWindow) throw new Error("PDF export isn't available in this version of Obsidian. Please report it with “Report a bug” in the plugin's settings.");
     const fs = require("fs"), os = require("os"), path = require("path");
     const notice = new Notice("Preparing PDF…", 0);
     try {
@@ -798,7 +902,11 @@ class MusicLibrarySync extends Plugin {
   async run(mode) {
     const s = this.state;
     if (s.running) { new Notice("Music sync is already running"); return; }
+    const need = !this.data.username ? "Enter your Discogs username" : !(await this.readToken(".discogs-token")) ? "Save your Discogs token" :
+      mode !== "dashboard" && !this.data.libraries.length ? "Add a base" : "";
+    if (need) { new Notice(`${need} in Settings → Discogs music sync and dashboard first.`, 8000); return; }
     const libs = structuredClone(this.data.libraries);
+    if (mode === "sync") for (const lib of libs) { try { await this.ensureLibraryFiles(lib); } catch (e) { console.error(e); } }
     Object.assign(s, { running: true, mode, steps: {}, now: "Starting…", log: "", progress: 0, stepList: this.steps() });
     window.musicLibrarySyncRunning = true;
     this.cancelled = false;
@@ -806,7 +914,7 @@ class MusicLibrarySync extends Plugin {
     const lines = [];
     const log = (l) => { lines.push(l); s.log = lines.slice(-400).join("\n"); s.now = l.trim(); this.refresh(); };
     const d = this.data;
-    const eng = new Engine(this.app.vault.adapter, log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs, template: `${this.manifest.dir}/dashboard-template.md` });
+    const eng = new Engine(this.app.vault.adapter, log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs });
     const steps = mode === "dashboard" ? [] : libs;
     const work = steps.length + 1;
     let failed = false, created = 0, priced = 0;
@@ -890,6 +998,43 @@ class LibraryModal extends Modal {
   onClose() { this.contentEl.empty(); }
 }
 
+// First-run setup: lists the folders in the user's Discogs collection and adds a base for each one
+// they tick, named after the folder.
+class SetupModal extends Modal {
+  constructor(app, plugin, done) { super(app); this.plugin = plugin; this.done = done; }
+  async onOpen() {
+    const { plugin } = this, c = this.contentEl;
+    this.titleEl.setText("Set up bases from Discogs");
+    const status = c.createEl("p", { cls: "setting-item-description", text: "Reading your Discogs folders…" });
+    let folders;
+    try { plugin.folderCache = null; folders = await plugin.discogsFolders(); }
+    catch (e) { folders = []; }
+    const used = new Set(plugin.data.libraries.map((l) => l.discogsFolder.toLowerCase()));
+    const free = folders.filter((f) => !used.has(f.toLowerCase()));
+    if (!folders.length) { status.setText("Couldn't read your Discogs folders. Check your username and token with Test, then try again."); return; }
+    if (!free.length) { status.setText("Every folder in your Discogs collection already has a base."); return; }
+    status.setText("Tick the Discogs folders to sync. Each becomes a base with the folder's name, which you can rename afterwards.");
+    const pick = new Map(free.map((f) => [f, f !== "Uncategorized"]));
+    for (const f of free) new Setting(c).setName(f)
+      .setDesc(f === "Uncategorized" ? "Records you haven't put in a folder." : `Creates ${MUSIC}/${f}/ and ${MUSIC}/${f}.base`)
+      .addToggle((t) => t.setValue(pick.get(f)).onChange((x) => pick.set(f, x)));
+    const out = c.createDiv({ cls: "mls-form-error" });
+    new Setting(c)
+      .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()))
+      .addButton((b) => b.setButtonText("Add bases").setCta().onClick(async () => {
+        const chosen = free.filter((f) => pick.get(f));
+        if (!chosen.length) { out.setText("Tick at least one folder."); return; }
+        b.setDisabled(true);
+        const { added, skipped } = await plugin.addFromDiscogs(chosen);
+        if (skipped.length) { out.setText(`Not added — ${skipped.join(" ")}`); b.setDisabled(false); }
+        else this.close();
+        if (added.length) new Notice(`Added ${added.map((l) => l.name).join(", ")}. Run “Sync from Discogs” to fill ${added.length === 1 ? "it" : "them"}.`, 8000);
+        this.done?.();
+      }));
+  }
+  onClose() { this.contentEl.empty(); }
+}
+
 class ConfirmModal extends Modal {
   constructor(app, title, text, action, onYes) { super(app); Object.assign(this, { title, text, action, onYes }); }
   onOpen() {
@@ -913,6 +1058,16 @@ class MusicSettingTab extends PluginSettingTab {
     el.empty();
     const redraw = () => this.display();
 
+    if (!d.username || !saved.discogs || !d.libraries.length) {
+      const g = el.createDiv({ cls: "mls-getting-started" });
+      g.createEl("strong", { text: "Getting started" });
+      const ol = g.createEl("ol");
+      [["Enter your Discogs username and paste a personal access token below, then press Test.", d.username && saved.discogs],
+       ["Under Bases, press “Set up from Discogs” to choose which Discogs folders to sync.", d.libraries.length > 0],
+       ["Run “Sync from Discogs” from the command palette, then press the disc icon in the ribbon to open the Music Dashboard.", false]]
+        .forEach(([t, done]) => ol.createEl("li", { text: t, cls: done ? "is-done" : "" }));
+    }
+
     new Setting(el).setName("Discogs").setHeading();
     new Setting(el).setName("Username").setDesc("The Discogs account whose collection is synced.")
       .addText((t) => t.setPlaceholder("your-discogs-name").setValue(d.username || "").onChange(async (x) => { d.username = x.trim(); P.folderCache = null; await P.save(); }));
@@ -932,18 +1087,28 @@ class MusicSettingTab extends PluginSettingTab {
     new Setting(el).setName("Bases").setHeading();
     el.createEl("p", { cls: "setting-item-description",
       text: "Each base syncs one Discogs folder into its own folder in Music, with its own .base view and a place on the dashboard. Names must be unique." });
+    if (!d.libraries.length) el.createEl("p", { cls: "setting-item-description", text: "No bases yet." });
     for (const lib of d.libraries) {
       const row = new Setting(el).setName(lib.name)
         .setDesc(`Discogs folder “${lib.discogsFolder}” → ${lib.dir} · #${lib.tag}`)
         .addExtraButton((b) => b.setIcon("pencil").setTooltip("Rename or edit").onClick(() => new LibraryModal(this.app, P, lib, redraw).open()))
-        .addExtraButton((b) => b.setIcon("trash-2").setTooltip(d.libraries.length < 2 ? "Keep at least one base" : "Stop syncing this base")
-          .setDisabled(d.libraries.length < 2)
+        .addExtraButton((b) => b.setIcon("trash-2").setTooltip("Stop syncing this base")
           .onClick(() => new ConfirmModal(this.app, `Stop syncing “${lib.name}”?`,
             `It disappears from the sync and the dashboard. ${lib.dir}, its notes and ${lib.base.split("/").pop()} stay in your vault — delete them yourself if you no longer want them.`,
             "Stop syncing", async () => { await P.removeLibrary(lib); redraw(); }).open()));
       setIcon(row.nameEl.createSpan({ cls: "mls-lib-icon", prepend: true }), lib.icon);
     }
-    new Setting(el).addButton((b) => b.setButtonText("Add base").setCta().onClick(() => new LibraryModal(this.app, P, null, redraw).open()));
+    new Setting(el)
+      .addButton((b) => b.setButtonText("Set up from Discogs").setDisabled(!d.username || !saved.discogs)
+        .setTooltip(d.username && saved.discogs ? "Choose Discogs folders to add as bases" : "Enter your username and token first")
+        .onClick(() => new SetupModal(this.app, P, redraw).open()))
+      .addButton((b) => b.setButtonText("Add base").setCta().onClick(() => new LibraryModal(this.app, P, null, redraw).open()));
+
+    new Setting(el).setName("Dashboard").setHeading();
+    const problems = P.dashboardProblems();
+    new Setting(el).setName(problems.length ? "The Music Dashboard needs other plugins" : "Dashboard plugins are ready")
+      .setDesc(problems.length ? problems.join(" ") : "Dataview (with JavaScript queries) and Charts are enabled.")
+      .addButton((b) => b.setButtonText("Open dashboard").onClick(() => P.openDashboard()));
 
     new Setting(el).setName("Sync").setHeading();
     new Setting(el).setName("Download all images").setDesc("Save every Discogs photo (back cover, labels, inserts) with a new record, not just the front cover.")
