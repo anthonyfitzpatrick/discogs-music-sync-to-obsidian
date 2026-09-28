@@ -38,6 +38,14 @@ const VIEWS = {
   value: { label: "Value", columns: ["artist", "title", "catno", "mediaCondition", "low", "mid", "high", "myCopy", "list", "forSale", "checked"], sort: "value" },
 };
 
+// Card sizes for the card views. Small is how cards looked before sizes could be chosen, and the default.
+const SIZES = {
+  artwork: { label: "Artwork only", text: false },
+  small: { label: "Small", text: true },
+  large: { label: "Large", text: true },
+};
+const DEFAULT_SIZE = "small";
+
 // The value used to rank records: the VG+ suggestion where there is one, else the cheapest listing.
 const worth = (r) => r.mid ?? r.list ?? -1;
 const SORTS = {
@@ -66,4 +74,4 @@ function libraryGroups(records, base, viewKey, search, sortKey) {
   return [...groups].sort((a, b) => a[0].localeCompare(b[0])).map(([name, rs]) => ({ name, records: rs }));
 }
 
-module.exports = { COLUMNS, VIEWS, SORTS, libraryGroups };
+module.exports = { COLUMNS, VIEWS, SORTS, SIZES, DEFAULT_SIZE, libraryGroups };

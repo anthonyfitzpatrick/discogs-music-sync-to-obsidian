@@ -315,6 +315,11 @@
 .mls-library-empty { color: var(--text-muted); }
 .mls-library-group { margin: 18px 0 8px; font-size: var(--font-ui-large); color: var(--text-normal); }
 .mls-library-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+.mls-library-cards.is-artwork { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.mls-library-cards.is-large { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 22px; }
+.mls-library-cards.is-large .mls-card-title { font-size: var(--font-ui-medium); margin-top: 8px; }
+.mls-library-cards.is-large .mls-card-sub { font-size: var(--font-ui-small); }
+.mls-library-cards.is-artwork .mls-card:hover img, .mls-library-cards.is-artwork .mls-card:focus-visible img { outline: 2px solid var(--text-normal); outline-offset: 1px; }
 .mls-card { display: block; text-decoration: none; color: var(--text-normal); }
 .mls-card:hover .mls-card-title { text-decoration: underline; }
 .mls-card img, .mls-card-nocover { width: 100%; aspect-ratio: 1; object-fit: cover; display: block;

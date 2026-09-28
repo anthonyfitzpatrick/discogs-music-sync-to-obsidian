@@ -2,7 +2,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert");
 const { decodeRecord } = require("../src/report.js");
-const { COLUMNS, VIEWS, libraryGroups } = require("../src/library.js");
+const { COLUMNS, VIEWS, SIZES, DEFAULT_SIZE, libraryGroups } = require("../src/library.js");
 
 const rec = (media, fm) => decodeRecord({ artist: "A", title: "T", ...fm }, media, "", "x", `Music/${media}/${fm.title || "T"}.md`);
 const records = [
@@ -38,4 +38,10 @@ test("table columns show the record's values, with money", () => {
   assert.strictEqual(COLUMNS.low.get(queen), "");
   assert.strictEqual(COLUMNS.ripped, undefined);
   assert.strictEqual(COLUMNS.genres.get(records[1]), "Rock, Metal");
+});
+
+test("cards come in three sizes, small by default as before", () => {
+  assert.deepStrictEqual(Object.entries(SIZES).map(([k, v]) => [k, v.label, v.text]),
+    [["artwork", "Artwork only", false], ["small", "Small", true], ["large", "Large", true]]);
+  assert.strictEqual(DEFAULT_SIZE, "small");
 });

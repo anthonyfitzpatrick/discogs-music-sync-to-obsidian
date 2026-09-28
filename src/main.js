@@ -10,7 +10,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const DEFAULT_FOLDER = "Music";
 // A folder path as typed, cleaned: no leading/trailing slashes, single slashes, no empty parts.
 const cleanFolder = (v) => String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
-const VERSION = "0.11.5";
+const VERSION = "0.11.6";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
@@ -29,7 +29,7 @@ const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidi
 const DEFAULTS = { last: null, username: "", folder: DEFAULT_FOLDER, lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" },
   value: null,                                   // Discogs' own value of the collection, fetched with each sync
   tab: "dashboard",                              // the Music tab shown last: dashboard or library
-  library: { base: "", view: "gallery", sort: "", search: "" },   // the Library's last choices
+  library: { base: "", view: "gallery", size: "small", sort: "", search: "" },   // the Library's last choices
   legacyFiles: [] };                             // files earlier versions made, offered for removal in settings
 // Files versions before 0.11 kept in the vault, which the plugin no longer uses. Those versions always
 // used a folder called Music, so only there. Offered for removal in settings, never removed without

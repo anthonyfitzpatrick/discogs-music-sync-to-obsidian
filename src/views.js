@@ -4,7 +4,7 @@
 // plugin and puts nothing but record notes and their images in the vault.
 const { ItemView, setIcon } = require("obsidian");
 const { reportParts } = require("./report.js");
-const { COLUMNS, VIEWS, SORTS, libraryGroups } = require("./library.js");
+const { COLUMNS, VIEWS, SORTS, SIZES, DEFAULT_SIZE, libraryGroups } = require("./library.js");
 
 const MUSIC_VIEW = "music-library-sync-music";
 // View types of 0.11.0, when the dashboard and library were separate: still registered so tabs left
@@ -100,6 +100,7 @@ class LibraryPane {
     this.view = view; this.plugin = view.plugin; this.el = el;
     const state = this.plugin.data.library;
     if (!VIEWS[state.view]) state.view = "gallery";       // a view since removed (Not ripped yet)
+    if (!SIZES[state.size]) state.size = DEFAULT_SIZE;
     const bar = el.createDiv({ cls: "mls-library-bar" });
     const select = (label, options, value, onChange) => {
       const wrap = bar.createEl("label", { cls: "mls-library-field", text: label });
@@ -111,6 +112,8 @@ class LibraryPane {
     };
     this.baseSelect = select("Base", [], state.base, (v) => { state.base = v; this.save(); });
     select("View", Object.entries(VIEWS).map(([k, v]) => [k, v.label]), state.view, (v) => { state.view = v; this.save(); });
+    // card size, for the views that show cards
+    this.sizeSelect = select("Size", Object.entries(SIZES).map(([k, v]) => [k, v.label]), state.size, (v) => { state.size = v; this.save(); });
     select("Sort", [["", "View's own"], ...Object.entries(SORTS).map(([k, v]) => [k, v.label])], state.sort, (v) => { state.sort = v; this.save(); });
     const search = bar.createEl("input", { type: "search", cls: "mls-library-search", attr: { placeholder: "Search artist, album, label, genre…", "aria-label": "Search" } });
     search.value = state.search;
@@ -137,21 +140,25 @@ class LibraryPane {
     if (!names.length) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No bases yet. Add one in Settings → Discogs music sync and dashboard, then run Sync from Discogs." }); return; }
     if (!total) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No records match." }); return; }
     const view = VIEWS[state.view] || VIEWS.gallery;
+    this.sizeSelect.parentElement.toggle(!!view.cards);
     for (const g of groups) {
       if (g.name) this.listEl.createEl("h3", { cls: "mls-library-group", text: `${g.name} (${g.records.length})` });
-      if (view.cards) this.cards(this.listEl.createDiv({ cls: "mls-library-cards" }), g.records);
+      if (view.cards) this.cards(this.listEl.createDiv({ cls: `mls-library-cards is-${state.size}` }), g.records, SIZES[state.size].text);
       else this.table(this.listEl, g.records, view.columns);
     }
   }
 
-  cards(el, records) {
+  cards(el, records, withText) {
     for (const r of records) {
-      const card = el.createEl("a", { cls: "mls-card", attr: { href: "#", "aria-label": `${r.artist} – ${r.title}` } });
+      const name = `${r.artist} – ${r.title}${r.year ? ` (${r.year})` : ""}`;
+      const card = el.createEl("a", { cls: "mls-card", attr: { href: "#", "aria-label": name, title: name } });
       const img = this.plugin.coverFile(r);
       if (img) card.createEl("img", { attr: { src: this.view.app.vault.getResourcePath(img), alt: "", loading: "lazy" } });
       else setIcon(card.createDiv({ cls: "mls-card-nocover" }), "disc-3");
-      card.createDiv({ cls: "mls-card-title", text: r.title });
-      card.createDiv({ cls: "mls-card-sub", text: [r.artist, r.year].filter(Boolean).join(" · ") });
+      if (withText) {
+        card.createDiv({ cls: "mls-card-title", text: r.title });
+        card.createDiv({ cls: "mls-card-sub", text: [r.artist, r.year].filter(Boolean).join(" · ") });
+      }
       this.view.registerDomEvent(card, "click", (e) => { e.preventDefault(); openNote(this.view.app, r.path, e); });
     }
   }

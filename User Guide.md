@@ -455,6 +455,7 @@ Along the top:
   | Catalogue | A table: artist, album, year, label, catalogue number, country, genres, purchase date, shop, conditions, lowest listing |
   | Value | A table of every price field, most valuable first |
 
+- **Size** (for Gallery and By genre): **Artwork only** (covers alone, packed closer; hover over a cover for the album and artist), **Small** (cover, album, artist and year; the default) or **Large** (bigger covers and text).
 - **Sort**: the view's own order, or artist, album, year, newest first or most valuable.
 - **Search**: artist, album, label, catalogue number, country, shop, base, genre or style. Every word must match.
 
