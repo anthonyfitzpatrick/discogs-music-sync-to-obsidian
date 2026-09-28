@@ -1,7 +1,7 @@
 // Tests the pure logic in src/bases.js and src/discogs.js directly: no Obsidian stand-in needed.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { tidy, slug, baseYaml, allMediaYaml, guessIcon, nameProblem, baseFor, formatCounts } = require("../src/bases.js");
+const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("../src/bases.js");
 const { decodeCollectionPage, decodeIdentity } = require("../src/discogs.js");
 
 const vinyl = { id: "vinyl", name: "Vinyl", formats: ["Vinyl"], tag: "vinyl-library" };
@@ -54,15 +54,6 @@ test("names must work as file names", () => {
   assert.match(nameProblem({ name: "x".repeat(61) }, [], false), /60 characters or fewer/);
   assert.match(nameProblem({ name: "!!!" }, [], false), /at least one letter or number/);
   assert.strictEqual(nameProblem({ name: "Box Sets (2024)", formats: ["Box Set"] }, [vinyl, cds], false), "");
-});
-
-test(".base files point at the base's folder and tag, with the standard views", () => {
-  const yaml = baseYaml("Music/Mini Discs", "mini-discs-library");
-  assert.match(yaml, /file\.inFolder\("Music\/Mini Discs"\)/);
-  assert.match(yaml, /file\.hasTag\("mini-discs-library"\)/);
-  for (const view of ["Gallery", "By genre", "Catalogue", "Value", "Not ripped yet"]) assert.match(yaml, new RegExp(`name: ${view}\\n`));
-  const all = allMediaYaml(["vinyl-library", "cd-library"]);
-  assert.match(all, /^filters:\n  or:\n    - file\.hasTag\("vinyl-library"\)\n    - file\.hasTag\("cd-library"\)\n/);
 });
 
 test("icons follow the folder name", () => {

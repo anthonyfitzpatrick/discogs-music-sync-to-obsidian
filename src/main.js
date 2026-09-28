@@ -7,31 +7,38 @@ const obsidian = require("obsidian");
 const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting } = obsidian;
 
 const MUSIC = "Music";
-const DASHBOARD = "Music/Music Dashboard.md";
-const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.10.2";
+const VERSION = "0.11.0";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
-// Bundled as text by esbuild (see esbuild.config.mjs), so the dashboard ships inside main.js.
-const DASHBOARD_TEMPLATE = require("./dashboard-template.md");
-// Pure logic, testable without Obsidian: names, tags, .base files, icons, naming rules.
-const { tidy, slug, baseYaml, allMediaYaml, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
+// Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
+const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
 // Decoders for Discogs responses, applied where the responses arrive.
 const { decodeCollectionPage, decodeIdentity } = require("./discogs.js");
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
 const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport } = require("./report.js");
+// The plugin's own views, in place of a dashboard note and .base files.
+const { DashboardView, LibraryView, DASHBOARD_VIEW, LIBRARY_VIEW } = require("./views.js");
 
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
 // A "base" (library) takes the records of one or more Discogs formats into its own vault folder, with
-// its own tag, its own .base view and its own place on the dashboard. A new install starts with none and
+// its own tag, and its own place in the Library and Dashboard views. A new install starts with none and
 // sets them up from the formats in the user's collection; these three are for installs from before 0.8,
 // whose settings predate the list of bases.
 const LEGACY_LIBRARIES = [
-  { id: "vinyl", name: "Vinyl", formats: ["Vinyl"],    dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3",        base: "Music/Vinyl.base" },
-  { id: "cds",   name: "CDs",   formats: ["CD"],       dir: "Music/CDs",   tag: "cd-library",    icon: "disc",          base: "Music/CDs.base" },
-  { id: "tapes", name: "Tapes", formats: ["Cassette"], dir: "Music/Tapes", tag: "tape-library",  icon: "cassette-tape", base: "Music/Tapes.base" },
+  { id: "vinyl", name: "Vinyl", formats: ["Vinyl"],    dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3" },
+  { id: "cds",   name: "CDs",   formats: ["CD"],       dir: "Music/CDs",   tag: "cd-library",    icon: "disc" },
+  { id: "tapes", name: "Tapes", formats: ["Cassette"], dir: "Music/Tapes", tag: "tape-library",  icon: "cassette-tape" },
 ];
-const DEFAULTS = { last: null, username: "", lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" } };
+const DEFAULTS = { last: null, username: "", lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" },
+  value: null,                                   // Discogs' own value of the collection, fetched with each sync
+  library: { base: "", view: "gallery", sort: "", search: "" },   // the Library view's last choices
+  legacyFiles: [] };                             // files earlier versions made, offered for removal in settings
+// Files earlier versions kept in the vault, which the plugin no longer uses. Offered for removal in
+// settings, never removed without asking. (The .base files of each base are added from settings.)
+const LEGACY_FILES = ["Music/Music Dashboard.md", "Music/All Media.base", "Music/.discogs-token", "Music/.genius-token",
+  "Music/.vinyl-sync/collection-value.json", "Music/.vinyl-sync/last-export.html"];
+// Tokens live in Obsidian's local storage for this vault on this device: never in a file, so never in git.
+const TOKEN_KEYS = { discogs: "music-library-sync-discogs-token", genius: "music-library-sync-genius-token" };
 const ICONS = ["disc-3", "disc", "disc-2", "cassette-tape", "album", "music", "music-2", "radio", "headphones", "library", "guitar", "piano"];
 const PRICE_KEYS = ["price_low_sek", "price_mid_sek", "price_high_sek", "price_max_sek", "price_my_copy_sek", "market_lowest_sek", "market_for_sale", "price_checked"];
 const GRADE = { low: "Good Plus (G+)", mid: "Very Good Plus (VG+)", high: "Near Mint (NM or M-)" };
@@ -102,14 +109,10 @@ class Engine {
   // cfg: { username, lyrics, gallery, libraries } — a snapshot of the settings for this run
   constructor(adapter, log, isCancelled, cfg) {
     this.fs = adapter; this.log = log; this.isCancelled = isCancelled || (() => false);
-    this.cfg = Object.assign({ username: "", lyrics: true, gallery: true, libraries: [], template: DASHBOARD_TEMPLATE }, cfg);
+    // cfg: also discogsToken and geniusToken, handed over by the plugin
+    this.cfg = Object.assign({ username: "", lyrics: true, gallery: true, libraries: [], discogsToken: "", geniusToken: "" }, cfg);
     this.last = { discogs: 0, genius: 0 };
     this.noSuggest = false;
-  }
-  async token(name) {
-    const p = `${MUSIC}/${name}`;
-    if (!(await this.fs.exists(p))) throw new Error(`Missing ${p}`);
-    return (await this.fs.read(p)).trim();
   }
   async http(kind, url, headers, binary) {
     const gap = kind === "discogs" ? 1100 : kind === "img" ? 300 : 350;
@@ -139,8 +142,9 @@ class Engine {
   genius(qs) { return this.http("genius", `https://api.genius.com/search?q=${encodeURIComponent(qs)}`, { Authorization: `Bearer ${this.gToken}` }); }
 
   async init() {
-    this.dToken = await this.token(".discogs-token");
-    this.gToken = (await this.fs.exists(`${MUSIC}/.genius-token`)) ? await this.token(".genius-token") : null;
+    if (!this.cfg.discogsToken) throw new Error("No Discogs token saved yet");
+    this.dToken = this.cfg.discogsToken;
+    this.gToken = this.cfg.geniusToken || null;
   }
   async ensureDir(p) { if (!(await this.fs.exists(p))) await this.fs.mkdir(p); }
   async listNotes(dir) {
@@ -407,20 +411,13 @@ class Engine {
     return n;
   }
 
-  /* ---- dashboard: live Dataview + Charts note built from the template shipped with the plugin ---- */
-  async dashboard(outPath = DASHBOARD) {
-    await this.ensureDir(`${MUSIC}/.vinyl-sync`);
-    let v = {};
-    try {
-      const r = await this.discogs(`users/${this.cfg.username}/collection/value`);
-      const n = (s) => Math.round(parseFloat(String(s).replace(/[^0-9.]/g, "")));
-      v = { MIN: n(r.minimum), MED: n(r.median), MAX: n(r.maximum), CHECKED: today() };
-    } catch (e) { this.log(`  collection value: ${e.message}`); }
-    if (v.MED) await this.fs.write(`${MUSIC}/.vinyl-sync/collection-value.json`, JSON.stringify(
-      { discogs_value_min: v.MIN, discogs_value_median: v.MED, discogs_value_max: v.MAX, checked: v.CHECKED }));
-    const text = this.cfg.template;
-    if (!(await this.fs.exists(outPath)) || (await this.fs.read(outPath)) !== text) await this.fs.write(outPath, text);
-    this.log(`Dashboard rebuilt${v.MED ? ` (Discogs median ${v.MED} kr)` : ""}`);
+  /* ---- Discogs' own value of the whole collection, for the dashboard: { min, med, max, checked } ---- */
+  async collectionValue() {
+    const r = await this.discogs(`users/${this.cfg.username}/collection/value`);
+    const n = (x) => { const v = Math.round(parseFloat(String(x ?? "").replace(/[^0-9.]/g, ""))); return Number.isFinite(v) ? v : null; };
+    const value = { min: n(r?.minimum), med: n(r?.median), max: n(r?.maximum), checked: today() };
+    this.log(`Collection value: ${value.med === null ? "not available" : `median ${value.med} kr`}`);
+    return value;
   }
 }
 
@@ -468,26 +465,63 @@ class MusicLibrarySync extends Plugin {
     // Before 0.10 a base synced a Discogs folder. The folders were named after their formats (Vinyl,
     // CD, Cassette), which are Discogs' own spellings, so each becomes the format its base takes.
     for (const lib of this.data.libraries) if (!Array.isArray(lib.formats)) { lib.formats = [lib.discogsFolder || lib.name]; delete lib.discogsFolder; }
+    // Before 0.11 each base had a .base file. The views replace them; the files are offered for removal.
+    for (const lib of this.data.libraries) if (lib.base) { if (!this.data.legacyFiles.includes(lib.base)) this.data.legacyFiles.push(lib.base); delete lib.base; }
+    this.data.library = Object.assign(structuredClone(DEFAULTS.library), this.data.library);
+    await this.importTokenFiles();
     this.state = { running: false, mode: null, steps: {}, now: "", log: "", progress: 0 };
     this.panels = new Set();
     this.registerMarkdownCodeBlockProcessor("music-sync", (_src, el) => this.renderPanel(el));
-    this.addRibbonIcon("disc-3", "Open Music Dashboard", () => this.openDashboard());
-    this.addCommand({ id: "open-dashboard", name: "Open dashboard", callback: () => this.openDashboard() });
+    this.registerView(DASHBOARD_VIEW, (leaf) => new DashboardView(leaf, this));
+    this.registerView(LIBRARY_VIEW, (leaf) => new LibraryView(leaf, this));
+    this.addRibbonIcon("disc-3", "Open Music Dashboard", () => this.openView(DASHBOARD_VIEW));
+    this.addRibbonIcon("library", "Open Music Library", () => this.openView(LIBRARY_VIEW));
+    this.addCommand({ id: "open-dashboard", name: "Open dashboard", callback: () => this.openView(DASHBOARD_VIEW) });
+    this.addCommand({ id: "open-library", name: "Open library", callback: () => this.openView(LIBRARY_VIEW) });
     this.addCommand({ id: "sync", name: "Sync from Discogs", callback: () => this.run("sync") });
     this.addCommand({ id: "prices", name: "Refresh prices", callback: () => this.run("prices") });
-    this.addCommand({ id: "dashboard", name: "Rebuild dashboard", callback: () => this.run("dashboard") });
+    this.addCommand({ id: "dashboard", name: "Refresh collection value", callback: () => this.run("dashboard") });
     this.addCommand({ id: "cancel", name: "Cancel running sync", callback: () => (this.cancelled = true) });
     this.addCommand({ id: "export-pdf", name: "Export dashboard as PDF…", callback: () => new ExportModal(this.app, this).open() });
     this.addCommand({ id: "add-base", name: "Add a base…", callback: () => new LibraryModal(this.app, this, null).open() });
     this.addSettingTab(new MusicSettingTab(this.app, this));
     this.registerInterval(window.setInterval(() => this.refresh(), 60 * 1000));
+    // The views follow the notes: redraw shortly after record notes change, move or go, and on theme changes.
+    const soon = () => { window.clearTimeout(this.redrawTimer); this.redrawTimer = window.setTimeout(() => this.redrawViews(), 600); };
+    const inMusic = (path) => String(path ?? "").startsWith(`${MUSIC}/`);
+    this.registerEvent(this.app.metadataCache.on("changed", (file) => { if (inMusic(file?.path)) soon(); }));
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { if (inMusic(file?.path) || inMusic(oldPath)) soon(); }));
+    this.registerEvent(this.app.vault.on("delete", (file) => { if (inMusic(file?.path)) soon(); }));
+    this.registerEvent(this.app.workspace.on("css-change", soon));
+  }
+
+  /* ---- views ---- */
+  async openView(type) {
+    const open = this.app.workspace.getLeavesOfType(type)[0];
+    if (open) { this.app.workspace.revealLeaf(open); return; }
+    const leaf = this.app.workspace.getLeaf(true);
+    await leaf.setViewState({ type, active: true });
+    this.app.workspace.revealLeaf(leaf);
+  }
+  redrawViews() {
+    for (const type of [DASHBOARD_VIEW, LIBRARY_VIEW])
+      for (const leaf of this.app.workspace.getLeavesOfType(type)) leaf.view?.render?.().catch?.((e) => console.error(e));
+  }
+  baseNames() { return this.data.libraries.map((l) => l.name); }
+  collectionValue() { return decodeCollectionValue(this.data.value && { discogs_value_min: this.data.value.min, discogs_value_median: this.data.value.med, discogs_value_max: this.data.value.max }); }
+  // A record's cover image, found the way Obsidian resolves the note's link to it.
+  coverFile(record) { return record.cover ? this.app.metadataCache.getFirstLinkpathDest(record.cover, record.path) : null; }
+  // Ticking Listened on the dashboard records it in the note's properties.
+  async markListened(path, box) {
+    const f = this.app.vault.getAbstractFileByPath(path);
+    try { await this.app.fileManager.processFrontMatter(f, (fm) => { fm.listened = true; fm.listened_on = today(); }); }
+    catch (e) { box.checked = false; new Notice(`Couldn't mark it as listened to: ${e.message}`); console.error(e); }
   }
 
   /* ---- libraries ("bases") ---- */
-  libraries() { return this.data.libraries.map((l) => ({ ...l })); }        // read by the dashboard note
   steps() {
     return [...this.data.libraries.map((l) => ({ key: l.id, label: l.name, icon: l.icon })),
-      { key: "dashboard", label: "Dashboard", icon: "layout-dashboard" }];
+      { key: "dashboard", label: "Collection value", icon: "coins" }];
   }
   libraryNames() {
     const n = this.data.libraries.map((l) => l.name);
@@ -501,57 +535,38 @@ class MusicLibrarySync extends Plugin {
     const problem = nameProblem(v, this.data.libraries.filter((l) => l !== self), !!self);
     if (problem) return problem;
     const name = tidy(v.name);
-    const fs = this.app.vault.adapter, basePath = `${MUSIC}/${name}.base`;
-    if ((!self || basePath.toLowerCase() !== self.base.toLowerCase()) && (await fs.exists(basePath))) return `Music already has a file called “${name}.base”.`;
+    const fs = this.app.vault.adapter;
     if (!self && (await fs.exists(`${MUSIC}/${name}`))) return `Music already has a folder called “${name}”.`;
     return "";
   }
 
-  // Creates the folder, the .base file and the All Media entry, then starts syncing it.
+  // Creates the base's folder and starts syncing it.
   async addLibrary(v) {
     const err = await this.checkLibrary(v); if (err) throw new Error(err);
     const name = tidy(v.name), s = slug(name);
     let id = s, n = 2; while (this.data.libraries.some((l) => l.id === id)) id = `${s}-${n++}`;
-    const lib = { id, name, formats: [...v.formats], dir: `${MUSIC}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3", base: `${MUSIC}/${name}.base` };
+    const lib = { id, name, formats: [...v.formats], dir: `${MUSIC}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3" };
     await this.ensureLibraryFiles(lib);
     this.data.libraries.push(lib);
     await this.save();
     return lib;
   }
 
-  // Renames the base (and its .base file) and updates its formats and icon. Notes aren't moved here;
-  // the next sync moves any record whose format now belongs to another base.
+  // Renames the base and updates its formats and icon. Notes aren't moved here; the next sync
+  // moves any record whose format now belongs to another base.
   async updateLibrary(lib, v) {
     const err = await this.checkLibrary(v, lib); if (err) throw new Error(err);
-    const name = tidy(v.name);
-    if (name !== lib.name) {
-      const f = this.app.vault.getAbstractFileByPath(lib.base), to = `${MUSIC}/${name}.base`;
-      if (f) {
-        // a case-only rename needs a stop in between on a case-insensitive disk
-        if (f.path.toLowerCase() === to.toLowerCase()) await this.app.fileManager.renameFile(f, `${MUSIC}/${name} (renaming).base`);
-        await this.app.fileManager.renameFile(f, to);
-      }
-      lib.base = to; lib.name = name;
-    }
+    lib.name = tidy(v.name);
     lib.formats = [...v.formats];
     lib.icon = v.icon || lib.icon;
     await this.save();
   }
 
-  // Creates whatever a base needs and is missing: its folder, its .base file, All Media.base and
-  // its entry there. Never changes a file that exists, apart from adding the entry.
+  // Creates the base's folder if it's missing.
   async ensureLibraryFiles(lib) {
     const vault = this.app.vault;
     if (!vault.getAbstractFileByPath(MUSIC)) await vault.createFolder(MUSIC);
     if (!vault.getAbstractFileByPath(lib.dir)) await vault.createFolder(lib.dir);
-    if (!(await vault.adapter.exists(lib.base))) await vault.create(lib.base, baseYaml(lib.dir, lib.tag));
-    const all = vault.getAbstractFileByPath(ALL_MEDIA_BASE);
-    if (!all) { if (!(await vault.adapter.exists(ALL_MEDIA_BASE))) await vault.create(ALL_MEDIA_BASE, allMediaYaml([lib.tag])); return; }
-    await vault.process(all, (t) => {
-      if (t.includes(`file.hasTag("${lib.tag}")`)) return t;
-      const m = [...t.matchAll(/^(\s*)- file\.hasTag\("[^"]*"\)$/gm)].pop();
-      return m ? t.slice(0, m.index + m[0].length) + `\n${m[1]}- file.hasTag("${lib.tag}")` + t.slice(m.index + m[0].length) : t;
-    });
   }
 
   // Adds a base for each chosen format, named after the format. Returns what was added and
@@ -567,35 +582,48 @@ class MusicLibrarySync extends Plugin {
     return { added, skipped };
   }
 
-  // What the Music Dashboard needs from other plugins and doesn't have, in plain words.
-  dashboardProblems() {
-    const pl = this.app.plugins, on = (id) => pl?.enabledPlugins?.has(id), out = [];
-    if (!on("dataview")) out.push("Install and enable the Dataview plugin.");
-    else if (pl.plugins?.dataview?.settings?.enableDataviewJs === false) out.push("Turn on “Enable JavaScript Queries” in Dataview's settings.");
-    if (!on("obsidian-charts")) out.push("Install and enable the Charts plugin.");
-    return out;
-  }
-
-  // Stops syncing a base. Its folder, notes and .base file are left in the vault.
+  // Stops syncing a base. Its folder and notes are left in the vault.
   async removeLibrary(lib) {
     this.data.libraries = this.data.libraries.filter((l) => l !== lib);
     await this.save();
   }
 
   /* ---- Discogs / Genius helpers for the settings page ---- */
-  async readToken(file) {
-    const p = `${MUSIC}/${file}`, fs = this.app.vault.adapter;
-    return (await fs.exists(p)) ? (await fs.read(p)).trim() : "";
+  token(kind) { return String(this.app.loadLocalStorage(TOKEN_KEYS[kind]) ?? ""); }
+  saveToken(kind, value) { this.app.saveLocalStorage(TOKEN_KEYS[kind], value.trim() || null); this.formatCache = null; }
+  // Tokens kept in files by earlier versions are read in once; the files are then offered for removal.
+  async importTokenFiles() {
+    for (const [kind, file] of [["discogs", `${MUSIC}/.discogs-token`], ["genius", `${MUSIC}/.genius-token`]]) {
+      if (this.token(kind) || !(await this.app.vault.adapter.exists(file))) continue;
+      const t = (await this.app.vault.adapter.read(file)).trim();
+      if (t) this.saveToken(kind, t);
+    }
   }
-  async writeToken(file, value) { await this.app.vault.adapter.write(`${MUSIC}/${file}`, value.trim() + "\n"); this.formatCache = null; }
+  // Files earlier versions made that are still in the vault.
+  async legacyFilesPresent() {
+    const out = [];
+    for (const p of [...new Set([...LEGACY_FILES, ...this.data.legacyFiles])]) if (await this.app.vault.adapter.exists(p)) out.push(p);
+    return out;
+  }
+  // Moves them to the system trash (recoverable): through Obsidian, except files in dot-folders or
+  // dot-files, which Obsidian doesn't index.
+  async trashLegacyFiles(paths) {
+    for (const p of paths) {
+      const hidden = p.split("/").some((part) => part.startsWith("."));
+      const f = hidden ? null : this.app.vault.getAbstractFileByPath(p);
+      if (f) await this.app.vault.trash(f, true); else await this.app.vault.adapter.trashSystem(p);
+    }
+    this.data.legacyFiles = [];
+    await this.save();
+  }
   async discogsIdentity() {
-    const t = await this.readToken(".discogs-token"); if (!t) throw new Error("No Discogs token saved yet");
+    const t = this.token("discogs"); if (!t) throw new Error("No Discogs token saved yet");
     const r = await requestUrl({ url: "https://api.discogs.com/oauth/identity", headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
     if (r.status >= 400) throw new Error(r.status === 401 ? "Discogs didn't accept the token" : `Discogs answered ${r.status}`);
     return decodeIdentity(r.json);
   }
   async geniusCheck() {
-    const t = await this.readToken(".genius-token"); if (!t) throw new Error("No Genius token saved yet");
+    const t = this.token("genius"); if (!t) throw new Error("No Genius token saved yet");
     const r = await requestUrl({ url: "https://api.genius.com/search?q=test", headers: { Authorization: `Bearer ${t}` }, throw: false });
     if (r.status >= 400) throw new Error(r.status === 401 ? "Genius didn't accept the token" : `Genius answered ${r.status}`);
   }
@@ -603,7 +631,7 @@ class MusicLibrarySync extends Plugin {
   // Discogs, so a base's formats are always chosen from real names and never typed.
   async collectionFormats() {
     if (this.formatCache) return this.formatCache;
-    const t = await this.readToken(".discogs-token");
+    const t = this.token("discogs");
     if (!t) throw new Error("No Discogs token saved yet");
     if (!this.data.username) throw new Error("No Discogs username entered yet");
     let items = [], page = 1;
@@ -621,16 +649,7 @@ class MusicLibrarySync extends Plugin {
     return (this.formatCache = formatCounts(items));
   }
 
-  // Shows the Music Dashboard: switches to its tab if it's open, builds the note first if it doesn't exist yet.
-  async openDashboard() {
-    const open = this.app.workspace.getLeavesOfType("markdown").find((l) => l.view?.file?.path === DASHBOARD);
-    if (open) { this.app.workspace.revealLeaf(open); return; }
-    if (!this.app.vault.getAbstractFileByPath(DASHBOARD)) await this.run("dashboard");
-    if (!this.app.vault.getAbstractFileByPath(DASHBOARD)) { new Notice("The Music Dashboard couldn't be created — see Sync log"); return; }
-    await this.app.workspace.openLinkText(DASHBOARD, "", false);
-  }
-
-  // Every record note of every base, decoded for the PDF report. Reads Obsidian's own metadata
+  // Every record note of every base, decoded for the views and the PDF report. Reads Obsidian's own metadata
   // cache and the notes themselves, so it needs no other plugin.
   async collectRecords() {
     const byTag = new Map(this.data.libraries.map((l) => [l.tag.toLowerCase(), l.name]));
@@ -640,7 +659,7 @@ class MusicLibrarySync extends Plugin {
       if (!fm) continue;
       const media = [].concat(fm.tags ?? []).map((t) => String(t).replace(/^#/, "").toLowerCase()).map((t) => byTag.get(t)).find(Boolean);
       if (!media) continue;
-      records.push(decodeRecord(fm, media, await this.app.vault.cachedRead(file), file.basename));
+      records.push(decodeRecord(fm, media, await this.app.vault.cachedRead(file), file.basename, file.path));
     }
     return records;
   }
@@ -667,16 +686,12 @@ class MusicLibrarySync extends Plugin {
     const fs = require("fs"), os = require("os"), path = require("path");
     const notice = new Notice("Preparing PDF…", 0);
     try {
-      let value = decodeCollectionValue(null);
-      try { value = decodeCollectionValue(JSON.parse(await this.app.vault.adapter.read(`${MUSIC}/.vinyl-sync/collection-value.json`))); }
-      catch { /* not fetched yet: the Discogs value columns show "—", as on the dashboard */ }
+      const value = this.collectionValue();
       const theme = this.themeForReport();
       const stamp = moment().format("D MMMM YYYY, HH:mm");
       const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp);
       const tmp = path.join(os.tmpdir(), `music-dashboard-export-${Date.now()}.html`);
       fs.writeFileSync(tmp, html, "utf8");
-      try { await this.app.vault.adapter.write(`${MUSIC}/.vinyl-sync/last-export.html`, html); }   // for troubleshooting
-      catch (e) { console.warn("Discogs music sync: couldn't keep a copy of the export page", e); }
       const [w, h] = PAPER[size] || PAPER.A4;
       const printableW = Math.round(((orientation === "landscape" ? h : w) - 2 * MARGIN) * 96);
       const win = new remote.BrowserWindow({ show: false, width: printableW, height: 1200, webPreferences: { offscreen: false } });
@@ -719,7 +734,7 @@ class MusicLibrarySync extends Plugin {
     };
     p.sync = btn("Sync from Discogs", "refresh-cw", "mls-primary", () => this.run("sync"), `Add new ${this.libraryNames()} records from Discogs`);
     p.prices = btn("Refresh prices", "coins", "mls-secondary", () => this.run("prices"), "Update the price fields on every record");
-    p.dash = btn("Rebuild dashboard", "layout-dashboard", "mls-secondary", () => this.run("dashboard"), "Redraw this dashboard");
+    p.dash = btn("Library", "library", "mls-secondary", () => this.openView(LIBRARY_VIEW), "Browse your records by base, as a gallery or tables");
     p.pdf = btn("Export PDF", "file-down", "mls-secondary", () => new ExportModal(this.app, this).open(), "Save the dashboard as a PDF in the paper size you choose");
     p.cancel = btn("Cancel", "x-circle", "mls-cancel", () => (this.cancelled = true), "Stop after the current record");
     p.steps = p.root.createDiv({ cls: "mls-steps" });
@@ -736,8 +751,8 @@ class MusicLibrarySync extends Plugin {
     p.root.toggleClass("is-done", !!s.justDone && !s.running);
     [p.sync, p.prices, p.dash, p.pdf].forEach((b) => (b.disabled = s.running));
     p.cancel.toggle(s.running);
-    if (s.running) p.meta.setText(s.mode === "sync" ? "Syncing with Discogs…" : s.mode === "prices" ? "Refreshing prices…" : "Rebuilding dashboard…");
-    else if (last) p.meta.setText(`${last.ok ? "✓" : "⚠"} Last ${last.mode === "sync" ? "sync" : last.mode === "prices" ? "price refresh" : "rebuild"} ${moment(last.at).fromNow()} · ${last.summary}`);
+    if (s.running) p.meta.setText(s.mode === "sync" ? "Syncing with Discogs…" : s.mode === "prices" ? "Refreshing prices…" : "Refreshing the collection value…");
+    else if (last) p.meta.setText(`${last.ok ? "✓" : "⚠"} Last ${last.mode === "sync" ? "sync" : last.mode === "prices" ? "price refresh" : "value refresh"} ${moment(last.at).fromNow()} · ${last.summary}`);
     else p.meta.setText("Press Sync to pull new records from Discogs");
     p.steps.empty();
     const all = s.stepList || this.steps();
@@ -758,7 +773,7 @@ class MusicLibrarySync extends Plugin {
   async run(mode) {
     const s = this.state;
     if (s.running) { new Notice("Music sync is already running"); return; }
-    const need = !this.data.username ? "Enter your Discogs username" : !(await this.readToken(".discogs-token")) ? "Save your Discogs token" :
+    const need = !this.data.username ? "Enter your Discogs username" : !this.token("discogs") ? "Save your Discogs token" :
       mode !== "dashboard" && !this.data.libraries.length ? "Add a base" : "";
     if (need) { new Notice(`${need} in Settings → Discogs music sync and dashboard first.`, 8000); return; }
     const libs = structuredClone(this.data.libraries);
@@ -769,7 +784,8 @@ class MusicLibrarySync extends Plugin {
     const lines = [];
     const log = (l) => { lines.push(l); s.log = lines.slice(-400).join("\n"); s.now = l.trim(); this.refresh(); };
     const d = this.data;
-    const eng = new Engine(vaultFiles(this.app), log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs });
+    const eng = new Engine(vaultFiles(this.app), log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs,
+      discogsToken: this.token("discogs"), geniusToken: this.token("genius") });
     const steps = mode === "dashboard" ? [] : libs;
     const work = steps.length + 1;
     let failed = false, created = 0, priced = 0;
@@ -795,15 +811,16 @@ class MusicLibrarySync extends Plugin {
         } catch (e) { failed = true; s.steps[st.id] = "error"; log(`ERROR (${st.name}): ${e.message}`); console.error(e); }
       }
       s.steps.dashboard = "active"; s.progress = steps.length / work; this.refresh();
-      try { await eng.dashboard(); s.steps.dashboard = "done"; }
-      catch (e) { failed = true; s.steps.dashboard = "error"; log(`ERROR (dashboard): ${e.message}`); console.error(e); }
+      try { this.data.value = await eng.collectionValue(); s.steps.dashboard = "done"; }
+      catch (e) { failed = true; s.steps.dashboard = "error"; log(`ERROR (collection value): ${e.message}`); console.error(e); }
+      this.redrawViews();
     } catch (e) { failed = true; log(`ERROR: ${e.message}`); console.error(e); }
     finally {
       const shown = Date.now() - started; if (shown < 1500) await new Promise((r) => setTimeout(r, 1500 - shown));
       const summary = this.cancelled ? `cancelled after ${created} new` : failed ? "finished with errors — open Sync log" :
         mode === "sync" ? ([created ? `${created} new record${created === 1 ? "" : "s"} added` : "", eng.moved ? `${eng.moved} moved to the right base` : "",
           eng.removed ? `${eng.removed} removed` : "", eng.unplaced ? `${eng.unplaced} with no base for their format — see Sync log` : ""].filter(Boolean).join(", ") || "already up to date") :
-        mode === "prices" ? `prices updated on ${priced} records` : "dashboard rebuilt";
+        mode === "prices" ? `prices updated on ${priced} records` : "collection value refreshed";
       this.data.last = { at: Date.now(), mode, ok: !failed && !this.cancelled, summary };
       await this.saveData(this.data);
       Object.assign(s, { running: false, progress: 1, now: "", justDone: true });
@@ -823,9 +840,9 @@ class LibraryModal extends Modal {
     const v = { name: lib?.name || "", formats: [...(lib?.formats || [])], icon: lib?.icon || "disc-3" };
     this.titleEl.setText(lib ? `Edit “${lib.name}”` : "Add a base");
     if (!lib) c.createEl("p", { cls: "setting-item-description",
-      text: "A base takes every record of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music with its own .base view, its own tag and its own place on the dashboard." });
+      text: "A base takes every record of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music, with its own tag and its own place in the Library and on the Dashboard." });
     new Setting(c).setName("Name")
-      .setDesc(lib ? `Also renames ${lib.base.split("/").pop()}. The notes stay in ${lib.dir}.` : "Used for the folder and the .base file. No two bases can have the same name.")
+      .setDesc(lib ? `The notes stay in ${lib.dir}.` : "Used for the base's folder in Music. No two bases can have the same name.")
       .addText((t) => { t.setPlaceholder("e.g. Minidiscs").setValue(v.name).onChange((x) => { v.name = x; touched = true; check(); }); window.setTimeout(() => t.inputEl.focus(), 0); });
 
     // Formats are picked from what Discogs reports for the collection, never typed, so a
@@ -875,7 +892,7 @@ class LibraryModal extends Modal {
       const n = ++seq, e = await plugin.checkLibrary(v, lib);
       if (n !== seq) return;                                    // a newer change is already being checked
       err.setText(touched ? e : ""); save.setDisabled(!!e);
-      if (preview) { const name = tidy(v.name); preview.setText(name && !e ? `Creates ${MUSIC}/${name}/, ${MUSIC}/${name}.base and the tag #${slug(name)}-library.` : ""); }
+      if (preview) { const name = tidy(v.name); preview.setText(name && !e ? `Creates ${MUSIC}/${name}/ and the tag #${slug(name)}-library.` : ""); }
     };
     check();
   }
@@ -900,7 +917,7 @@ class SetupModal extends Modal {
     status.setText("Tick the formats to sync. Each becomes a base with the format's name, which you can rename afterwards. A record with several formats (a box set, say) goes to the base of its first format that has one.");
     const pick = new Map(free.map((f) => [f.name, true]));
     for (const f of free) new Setting(c).setName(f.name)
-      .setDesc(`${f.count} record${f.count === 1 ? "" : "s"}. Creates ${MUSIC}/${f.name}/ and ${MUSIC}/${f.name}.base`)
+      .setDesc(`${f.count} record${f.count === 1 ? "" : "s"}. Creates ${MUSIC}/${f.name}/`)
       .addToggle((t) => t.setValue(true).onChange((x) => pick.set(f.name, x)));
     const out = c.createDiv({ cls: "mls-form-error" });
     new Setting(c)
@@ -937,7 +954,8 @@ class MusicSettingTab extends PluginSettingTab {
   async display() {
     const P = this.plugin, d = P.data, el = this.containerEl;
     const gen = (this.gen = (this.gen || 0) + 1);
-    const saved = { discogs: !!(await P.readToken(".discogs-token")), genius: !!(await P.readToken(".genius-token")) };
+    const saved = { discogs: !!P.token("discogs"), genius: !!P.token("genius") };
+    const legacy = await P.legacyFilesPresent();
     if (gen !== this.gen) return;                               // a newer redraw has started
     el.empty();
     const redraw = () => this.display();
@@ -955,7 +973,7 @@ class MusicSettingTab extends PluginSettingTab {
     new Setting(el).setName("Discogs").setHeading();
     new Setting(el).setName("Username").setDesc("The Discogs account whose collection is synced.")
       .addText((t) => t.setPlaceholder("your-discogs-name").setValue(d.username || "").onChange(async (x) => { d.username = x.trim(); P.formatCache = null; await P.save(); }));
-    this.token(el, saved.discogs, "Personal access token", ".discogs-token",
+    this.token(el, saved.discogs, "Personal access token", "discogs",
       "Required. Create one at discogs.com → Settings → Developers.", "Discogs", async () => {
         const who = await P.discogsIdentity();
         if (!d.username) { d.username = who; await P.save(); redraw(); }
@@ -965,12 +983,12 @@ class MusicSettingTab extends PluginSettingTab {
     new Setting(el).setName("Lyrics").setHeading();
     new Setting(el).setName("Add Genius lyrics links").setDesc("Look up each track on Genius when a record is added. Needs a Genius token.")
       .addToggle((t) => t.setValue(d.lyrics).onChange(async (x) => { d.lyrics = x; await P.save(); }));
-    this.token(el, saved.genius, "Genius access token", ".genius-token",
+    this.token(el, saved.genius, "Genius access token", "genius",
       "Optional. Create a client at genius.com/api-clients and generate an access token.", "Genius", async () => { await P.geniusCheck(); return "Genius accepted the token"; });
 
     new Setting(el).setName("Bases").setHeading();
     el.createEl("p", { cls: "setting-item-description",
-      text: "Each base takes the records of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music, with its own .base view and a place on the dashboard. Names must be unique." });
+      text: "Each base takes the records of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music, with its own place in the Library and on the Dashboard. Names must be unique." });
     if (!d.libraries.length) el.createEl("p", { cls: "setting-item-description", text: "No bases yet." });
     for (const lib of d.libraries) {
       const row = new Setting(el).setName(lib.name)
@@ -978,7 +996,7 @@ class MusicSettingTab extends PluginSettingTab {
         .addExtraButton((b) => b.setIcon("pencil").setTooltip("Rename or edit").onClick(() => new LibraryModal(this.app, P, lib, redraw).open()))
         .addExtraButton((b) => b.setIcon("trash-2").setTooltip("Stop syncing this base")
           .onClick(() => new ConfirmModal(this.app, `Stop syncing “${lib.name}”?`,
-            `It disappears from the sync and the dashboard. ${lib.dir}, its notes and ${lib.base.split("/").pop()} stay in your vault — delete them yourself if you no longer want them.`,
+            `It disappears from the sync, the Library and the Dashboard. ${lib.dir} and its notes stay in your vault — delete them yourself if you no longer want them.`,
             "Stop syncing", async () => { await P.removeLibrary(lib); redraw(); }).open()));
       setIcon(row.nameEl.createSpan({ cls: "mls-lib-icon", prepend: true }), lib.icon);
     }
@@ -988,11 +1006,16 @@ class MusicSettingTab extends PluginSettingTab {
         .onClick(() => new SetupModal(this.app, P, redraw).open()))
       .addButton((b) => b.setButtonText("Add base").setCta().onClick(() => new LibraryModal(this.app, P, null, redraw).open()));
 
-    new Setting(el).setName("Dashboard").setHeading();
-    const problems = P.dashboardProblems();
-    new Setting(el).setName(problems.length ? "The Music Dashboard needs other plugins" : "Dashboard plugins are ready")
-      .setDesc(problems.length ? `${problems.join(" ")} Syncing and PDF export work without them.` : "Dataview (with JavaScript queries) and Charts are enabled.")
-      .addButton((b) => b.setButtonText("Open dashboard").onClick(() => P.openDashboard()));
+    if (legacy.length) {
+      new Setting(el).setName("Files from earlier versions").setHeading();
+      el.createEl("p", { cls: "setting-item-description",
+        text: "Earlier versions kept these in your vault. The plugin no longer uses them: the Dashboard and Library views, and tokens kept on this device, have replaced them." });
+      const ul = el.createEl("ul", { cls: "mls-legacy-list" });
+      for (const f of legacy) ul.createEl("li", { text: f });
+      new Setting(el).addButton((b) => b.setButtonText("Move to trash").setWarning().onClick(() => new ConfirmModal(this.app, "Move these files to the trash?",
+        `${legacy.join(", ")}. They go to your system trash, so you can get them back.`, "Move to trash",
+        async () => { await P.trashLegacyFiles(legacy); new Notice("Moved to the trash"); redraw(); }).open()));
+    }
 
     new Setting(el).setName("Sync").setHeading();
     new Setting(el).setName("Download all images").setDesc("Save every Discogs photo (back cover, labels, inserts) with a new record, not just the front cover.")
@@ -1044,16 +1067,16 @@ class MusicSettingTab extends PluginSettingTab {
     }
   }
 
-  // A token is kept in its own file in Music (ignored by git), never in the plugin's settings.
-  token(el, saved, name, file, desc, service, test) {
+  // A token is kept in Obsidian's local storage on this device: never in a file, the vault or the plugin's settings.
+  token(el, saved, name, kind, desc, service, test) {
     const P = this.plugin;
-    const s = new Setting(el).setName(name).setDesc(`${desc} ${saved ? "A token is saved." : "No token saved yet."}`);
+    const s = new Setting(el).setName(name).setDesc(`${desc} ${saved ? "A token is saved on this device." : "No token saved yet."}`);
     s.addText((t) => {
       t.inputEl.type = "password";
       t.setPlaceholder(saved ? "Paste a new token to replace it" : "Paste the token here");
       t.inputEl.addEventListener("change", async () => {
         const x = t.getValue().trim(); if (!x) return;
-        await P.writeToken(file, x); new Notice(`${service} token saved`); this.display();
+        P.saveToken(kind, x); new Notice(`${service} token saved on this device`); this.display();
       });
     });
     s.addButton((b) => b.setButtonText("Test").setDisabled(!saved).onClick(async () => {

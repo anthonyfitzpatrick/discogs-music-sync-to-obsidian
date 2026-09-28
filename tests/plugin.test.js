@@ -14,9 +14,10 @@ const stub = {
     constructor() { this.saved = undefined; }
     async loadData() { return this.saved; }
     async saveData(d) { this.saved = JSON.parse(JSON.stringify(d)); }
-    registerMarkdownCodeBlockProcessor() {} addRibbonIcon() {} addCommand() {} addSettingTab() {} registerInterval() {}
+    registerMarkdownCodeBlockProcessor() {} addRibbonIcon() {} addCommand() {} addSettingTab() {} registerInterval() {} registerView() {} registerEvent() {}
   },
   PluginSettingTab: class { constructor(app) { this.app = app; } },
+  ItemView: class { constructor(leaf) { this.leaf = leaf; } },
   Modal: class { constructor(app) { this.app = app; } },
   Setting: class {},
   Notice: class { constructor(msg) { notices.push(msg); } },
@@ -32,6 +33,7 @@ const { Engine, vaultFiles } = Plugin;
 // An in-memory vault whose paths are case-insensitive, like the default macOS and Windows disks.
 function makeVault(entries = {}) {
   const files = new Map(), calls = [];   // calls: what went through Obsidian's Vault API
+  const local = new Map();                // Obsidian's local storage for this vault
   const put = (p, text = null) => files.set(p.toLowerCase(), { path: p, text });
   for (const [p, t] of Object.entries(entries)) put(p, t);
   const adapter = {
@@ -40,6 +42,7 @@ function makeVault(entries = {}) {
     write: async (p, t) => put(p, t),
     mkdir: async (p) => put(p),
     writeBinary: async (p) => put(p, "<binary>"),
+    trashSystem: async (p) => { calls.push(`trashSystem ${p}`); files.delete(p.toLowerCase()); },
     rename: async (from, to) => { const f = files.get(from.toLowerCase()); files.delete(from.toLowerCase()); f.path = to; files.set(to.toLowerCase(), f); },
     list: async (dir) => ({ files: [...files.values()].filter((f) => f.text !== null && path.posix.dirname(f.path) === dir).map((f) => f.path), folders: [] }),
   };
@@ -50,15 +53,20 @@ function makeVault(entries = {}) {
       createFolder: async (p) => put(p),
       create: async (p, t) => { if (files.has(p.toLowerCase())) throw new Error("File already exists"); put(p, t); calls.push(`create ${p}`); },
       process: async (f, fn) => { f.text = fn(f.text); },
+      on: () => ({}),
+      trash: async (f) => { calls.push(`trash ${f.path}`); files.delete(f.path.toLowerCase()); },
       modify: async (f, text) => { f.text = text; calls.push(`modify ${f.path}`); },
       createBinary: async (p) => { put(p, "<binary>"); calls.push(`createBinary ${p}`); },
       modifyBinary: async (f) => { calls.push(`modifyBinary ${f.path}`); },
     },
     fileManager: { renameFile: async (f, to) => { calls.push(`renameFile ${f.path} → ${to}`); files.delete(f.path.toLowerCase()); f.path = to; files.set(to.toLowerCase(), f); } },
     plugins: { enabledPlugins: new Set(), plugins: {} },
-    workspace: { getLeavesOfType: () => [] },
+    workspace: { getLeavesOfType: () => [], on: () => ({}) },
+    metadataCache: { on: () => ({}) },
+    loadLocalStorage: (k) => local.get(k) ?? null,
+    saveLocalStorage: (k, v) => { if (v === null) local.delete(k); else local.set(k, v); },
   };
-  return { app, files, calls, text: (p) => files.get(p.toLowerCase())?.text };
+  return { app, files, calls, local, text: (p) => files.get(p.toLowerCase())?.text };
 }
 
 // A collection item as Discogs sends it.
@@ -97,7 +105,8 @@ test("saved bases and username are kept as they are", async () => {
 test("bases from 0.8 and 0.9, which synced a Discogs folder, take the format of the same name", async () => {
   const old = [{ id: "cds", name: "CDs", discogsFolder: "CD", dir: "Music/CDs", tag: "cd-library", icon: "disc", base: "Music/CDs.base" }];
   const { p } = await makePlugin({ username: "someone", libraries: old });
-  assert.deepStrictEqual(p.data.libraries, [{ id: "cds", name: "CDs", formats: ["CD"], dir: "Music/CDs", tag: "cd-library", icon: "disc", base: "Music/CDs.base" }]);
+  assert.deepStrictEqual(p.data.libraries, [{ id: "cds", name: "CDs", formats: ["CD"], dir: "Music/CDs", tag: "cd-library", icon: "disc" }]);
+  assert.deepStrictEqual(p.data.legacyFiles, ["Music/CDs.base"], "its .base file is offered for removal");
 });
 
 test("a sync without a username or token explains what's missing and does nothing", async () => {
@@ -111,46 +120,29 @@ test("a sync without a username or token explains what's missing and does nothin
   assert.strictEqual(p.state.running, false);
 });
 
-test("adding a base in an empty vault creates its folder, its .base file and All Media.base", async () => {
-  const { p, text } = await makePlugin(undefined);
+test("adding a base creates only its folder: no .base files or other files", async () => {
+  const { p, files, app } = await makePlugin(undefined);
   const lib = await p.addLibrary({ name: " Mini  Discs ", formats: ["Minidisc"], icon: "disc-2" });
-  assert.deepStrictEqual(lib, { id: "mini-discs", name: "Mini Discs", formats: ["Minidisc"], dir: "Music/Mini Discs",
-    tag: "mini-discs-library", icon: "disc-2", base: "Music/Mini Discs.base" });
-  assert.match(text("Music/Mini Discs.base"), /file\.inFolder\("Music\/Mini Discs"\)/);
-  assert.match(text("Music/All Media.base"), /- file\.hasTag\("mini-discs-library"\)/);
-  await p.addLibrary({ name: "Box Sets", formats: ["Box Set"] });
-  const all = text("Music/All Media.base");
-  assert.match(all, /hasTag\("mini-discs-library"\)\n\s+- file\.hasTag\("box-sets-library"\)/);
-});
-
-test("missing files of existing bases are created, and existing files are left alone", async () => {
-  const { p, text } = await makePlugin({ last: null }, { "Music/Vinyl.base": "custom view" });
-  for (const lib of p.data.libraries) await p.ensureLibraryFiles(lib);
-  assert.strictEqual(text("Music/Vinyl.base"), "custom view");
-  assert.match(text("Music/CDs.base"), /hasTag\("cd-library"\)/);
-  const all = text("Music/All Media.base");
-  for (const t of ["vinyl-library", "cd-library", "tape-library"]) assert.ok(all.includes(`file.hasTag("${t}")`), t);
+  assert.deepStrictEqual(lib, { id: "mini-discs", name: "Mini Discs", formats: ["Minidisc"], dir: "Music/Mini Discs", tag: "mini-discs-library", icon: "disc-2" });
+  assert.ok(app.vault.getAbstractFileByPath("Music/Mini Discs"));
+  assert.deepStrictEqual([...files.values()].filter((f) => f.text !== null), [], "nothing but folders");
 });
 
 test("checking a base adds the vault's own clashes to the naming rules", async () => {
   // The naming rules themselves are tested directly in bases.test.js.
-  const { p } = await makePlugin({ last: null }, { "Music/Exports": null, "Music/Old.base": "x" });
+  const { p } = await makePlugin({ last: null }, { "Music/Exports": null });
   const check = (name, self = null) => p.checkLibrary({ name, formats: self ? self.formats : ["Minidisc"] }, self);
   assert.match(await check("vinyl"), /already a base called “Vinyl”/, "the naming rules apply");
   assert.match(await check("Exports"), /already has a folder called “Exports”/);
-  assert.match(await check("old"), /already has a file called “old\.base”/);
-  assert.strictEqual(await check("Tapes", p.data.libraries[2]), "", "a base doesn't clash with itself or its own files");
+  assert.strictEqual(await check("Tapes", p.data.libraries[2]), "", "a base doesn't clash with itself");
   assert.strictEqual(await check("Minidiscs"), "");
 });
 
-test("renaming a base renames its .base file, including a change of case only", async () => {
-  const { p, app } = await makePlugin({ last: null }, { "Music/Tapes.base": "x" });
+test("renaming a base changes its name only; its notes stay where they are", async () => {
+  const { p } = await makePlugin({ last: null });
   const tapes = p.data.libraries[2];
-  await p.updateLibrary(tapes, { name: "Cassettes", formats: ["Cassette"] });
-  assert.ok(app.vault.getAbstractFileByPath("Music/Cassettes.base"));
-  assert.strictEqual(tapes.dir, "Music/Tapes", "notes stay where they are");
-  await p.updateLibrary(tapes, { name: "cassettes", formats: ["Cassette"] });
-  assert.ok(app.vault.getAbstractFileByPath("Music/cassettes.base"));
+  await p.updateLibrary(tapes, { name: "Cassettes", formats: ["Cassette", "Microcassette"] });
+  assert.deepStrictEqual([tapes.name, tapes.formats, tapes.dir, tapes.tag], ["Cassettes", ["Cassette", "Microcassette"], "Music/Tapes", "tape-library"]);
 });
 
 test("the last base can be removed", async () => {
@@ -168,32 +160,10 @@ test("setting up from Discogs adds a base per format, with a fitting icon, and s
   assert.match(skipped[0], /^vinyl: /);
 });
 
-test("the dashboard is built from the template bundled in main.js", async () => {
-  const { app, text } = makeVault();
-  const eng = new Engine(app.vault.adapter, () => {}, () => false, { username: "someone" });
-  eng.discogs = async () => { throw new Error("offline"); };
-  await eng.dashboard();
-  const note = text("Music/Music Dashboard.md");
-  assert.match(note, /^```music-sync\n```\n/, "starts with the sync panel; Obsidian's title shows the note's name, so there's no heading");
-  assert.doesNotMatch(note, /^# /m);
-  assert.match(note, /```dataviewjs/);
-  assert.match(note, /No bases to show yet/);
-});
-
-test("the dashboard reports the plugins it needs", async () => {
-  const { p, app } = await makePlugin(undefined);
-  assert.strictEqual(p.dashboardProblems().length, 2);
-  app.plugins.enabledPlugins = new Set(["dataview", "obsidian-charts"]);
-  app.plugins.plugins.dataview = { settings: { enableDataviewJs: false } };
-  assert.deepStrictEqual(p.dashboardProblems(), ["Turn on “Enable JavaScript Queries” in Dataview's settings."]);
-  app.plugins.plugins.dataview.settings.enableDataviewJs = true;
-  assert.deepStrictEqual(p.dashboardProblems(), []);
-});
-
 test("reading the collection's formats reports why it failed instead of returning nothing", async () => {
   const { p } = await makePlugin(undefined, {});
   await assert.rejects(p.collectionFormats(), /No Discogs token saved yet/);
-  await p.app.vault.adapter.write("Music/.discogs-token", "t0ken\n");
+  p.saveToken("discogs", "t0ken");
   await assert.rejects(p.collectionFormats(), /No Discogs username entered yet/);
   p.data.username = "someone";
   for (const [status, why] of [[401, /didn't accept the token/], [404, /no user called “someone”/], [502, /answered 502/]]) {
@@ -208,24 +178,6 @@ test("reading the collection's formats reports why it failed instead of returnin
     return { status: 200, json: { releases: [item(1, ["Vinyl"]), item(2, ["Box Set", "Vinyl"]), item(3, ["CD"])], pagination: { page: 1, pages: 1 } } };
   };
   assert.deepStrictEqual(await p.collectionFormats(), [{ name: "Vinyl", count: 2 }, { name: "Box Set", count: 1 }, { name: "CD", count: 1 }]);
-});
-
-test("the dashboard's CSS has no declarations outside a rule", () => {
-  // Leftover declarations with no selector turn into a bogus selector and swallow the next
-  // rule as their body. It happened: the dashboard's table rule was lost that way.
-  const template = require("node:fs").readFileSync(path.join(__dirname, "..", "src", "dashboard-template.md"), "utf8");
-  const sheets = [...template.matchAll(/root\.createEl\("style", \{ text: (?:`([\s\S]*?)`|"((?:[^"\\]|\\.)*)") \}\)/g)]
-    .map((m) => m[1] ?? JSON.parse(`"${m[2]}"`));
-  assert.ok(sheets.length >= 2, "found the dashboard's style sheets");
-  for (const css of sheets) {
-    let depth = 0, selector = "";
-    for (const ch of css.replace(/\/\*[\s\S]*?\*\//g, "")) {
-      if (ch === "{") { if (depth++ === 0) { assert.doesNotMatch(selector, /[;]/, `declarations outside a rule: ${selector.trim().slice(0, 80)}`); selector = ""; } }
-      else if (ch === "}") { assert.ok(depth > 0, "a closing brace with no rule open"); depth--; }
-      else if (depth === 0) selector += ch;
-    }
-    assert.strictEqual(depth, 0, "every rule is closed");
-  }
 });
 
 // ------------------------------------------------------------------ the sync
@@ -312,15 +264,56 @@ test("a base whose format no record has is reported", async () => {
 test("the sync works through Obsidian's Vault API, so Obsidian's index sees every change at once", async () => {
   // Writing past Obsidian to the disk left Dataview, and so the dashboard, showing a moved record in its old base.
   const vault = makeVault({ "Music": null, "Music/Vinyl": null, "Music/CDs": null, "Music/Vinyl/covers": null, "Music/CDs/covers": null,
-    "Music/Vinyl/Misfiled.md": noteFor(5, "vinyl-library", "Bought at a fair."), "Music/Music Dashboard.md": "old" });
+    "Music/Vinyl/Misfiled.md": noteFor(5, "vinyl-library", "Bought at a fair.") });
   const log = [];
-  const eng = new Engine(vaultFiles(vault.app), (l) => log.push(l), () => false, { username: "someone", lyrics: false, gallery: false, libraries: [VINYL, CDS] });
+  const eng = new Engine(vaultFiles(vault.app), (l) => log.push(l), () => false, { username: "someone", lyrics: false, gallery: false, libraries: [VINYL, CDS], discogsToken: "t" });
   eng.discogs = makeEngine(vault, [VINYL, CDS], [item(5, ["CD"]), item(6, ["Vinyl"])]).eng.discogs;
   await eng.syncAll();
-  await eng.dashboard();
   assert.ok(vault.calls.includes("renameFile Music/Vinyl/Misfiled.md → Music/CDs/Misfiled.md"), "moved with Obsidian's file manager, so links follow");
   assert.ok(vault.calls.some((c) => c.startsWith("modify Music/Vinyl/Misfiled.md")), "retagged through the vault");
   assert.ok(vault.calls.some((c) => /^create Music\/Vinyl\/.*\.md$/.test(c)), "new notes created through the vault");
-  assert.ok(vault.calls.includes("modify Music/Music Dashboard.md"), "the dashboard note is rewritten through the vault");
   assert.match(vault.text("Music/CDs/Misfiled.md"), /  - cd-library\n[\s\S]*Bought at a fair\./);
+});
+
+// ------------------------------------------------------------------ nothing outside the plugin
+
+test("tokens are kept in Obsidian's local storage, never in a file", async () => {
+  const { p, files } = await makePlugin(undefined);
+  p.saveToken("discogs", "  abc123 ");
+  assert.strictEqual(p.token("discogs"), "abc123");
+  assert.strictEqual(p.token("genius"), "");
+  assert.deepStrictEqual([...files.values()].filter((f) => f.text !== null), [], "no file written");
+  p.saveToken("discogs", "");
+  assert.strictEqual(p.token("discogs"), "", "an empty token clears it");
+});
+
+test("tokens that earlier versions kept in files are read in once", async () => {
+  const { p } = await makePlugin({ username: "someone", libraries: [] }, { "Music/.discogs-token": "old-token\n" });
+  assert.strictEqual(p.token("discogs"), "old-token");
+  assert.strictEqual(p.token("genius"), "", "a missing file is skipped");
+});
+
+test("files earlier versions made are listed, and moved to the trash only when asked", async () => {
+  const old = [{ id: "vinyl", name: "Vinyl", formats: ["Vinyl"], dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3", base: "Music/Vinyl.base" }];
+  const { p, calls, text } = await makePlugin({ username: "someone", libraries: old }, {
+    "Music/Vinyl.base": "view", "Music/All Media.base": "all", "Music/Music Dashboard.md": "dash", "Music/.discogs-token": "t",
+    "Music/.vinyl-sync/collection-value.json": "{}", "Music/Vinyl/Record.md": "a record" });
+  assert.strictEqual(p.data.libraries[0].base, undefined, "the base no longer points at a .base file");
+  const legacy = await p.legacyFilesPresent();
+  assert.deepStrictEqual(legacy.sort(), ["Music/.discogs-token", "Music/.vinyl-sync/collection-value.json", "Music/All Media.base", "Music/Music Dashboard.md", "Music/Vinyl.base"]);
+  assert.strictEqual(calls.filter((c) => c.startsWith("trash")).length, 0, "nothing removed without asking");
+  await p.trashLegacyFiles(legacy);
+  assert.deepStrictEqual(await p.legacyFilesPresent(), []);
+  assert.ok(calls.includes("trash Music/Vinyl.base") && calls.includes("trashSystem Music/.discogs-token"), "indexed files through Obsidian, dot-files directly");
+  assert.strictEqual(text("Music/Vinyl/Record.md"), "a record", "record notes are never touched");
+});
+
+test("Discogs' collection value is decoded into the plugin's settings, not a file", async () => {
+  const { eng } = makeEngine(makeVault(), [VINYL], []);
+  eng.discogs = async () => ({ minimum: "SEK10,742.13", median: "SEK24,997.50", maximum: "SEK64,759.00" });
+  const v = await eng.collectionValue();
+  assert.deepStrictEqual([v.min, v.med, v.max], [10742, 24998, 64759]);
+  eng.discogs = async () => ({});
+  const none = await eng.collectionValue();
+  assert.deepStrictEqual([none.min, none.med, none.max], [null, null, null]);
 });

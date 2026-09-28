@@ -1,7 +1,7 @@
-// The Music Dashboard as a self-contained HTML page, for PDF export. It needs no other plugin:
-// records are decoded here from each note's frontmatter and tracklist, the figures are computed
-// here, and the charts are drawn here as SVG. Nothing in this file touches Obsidian, so it is
-// tested directly. The live dashboard note (Dataview + Charts) shows the same sections.
+// The Music Dashboard: its figures, its SVG charts and its layout, shared by the dashboard view and
+// the PDF export. It needs no other plugin: records are decoded here from each note's frontmatter and
+// tracklist, the figures are computed here, and the charts are drawn here. Nothing in this file
+// touches Obsidian, so it is tested directly.
 
 /* ------------------------------------------------------------------ decoding */
 
@@ -23,10 +23,16 @@ function tracklist(body) {
   return { tracks: rows.length, secs };
 }
 
-// One record note: its frontmatter, the name of the base it belongs to, and its text.
-function decodeRecord(fm, media, body, fallbackTitle) {
+// A cover property ("[[123.jpeg]]") as the linked file's name.
+const linkTarget = (v) => text(v).replace(/^\[\[|\]\]$/g, "").split("|")[0];
+
+// One record note: its frontmatter, the name of the base it belongs to, its text and its path.
+function decodeRecord(fm, media, body, fallbackTitle, path = "") {
   return {
-    title: text(fm.title) || fallbackTitle, artist: text(fm.artist), media,
+    path, title: text(fm.title) || fallbackTitle, artist: text(fm.artist), media,
+    label: text(fm.label), catno: text(fm.catno), country: text(fm.country), format: text(fm.format), cover: linkTarget(fm.cover),
+    mediaCondition: text(fm.media_condition), sleeveCondition: text(fm.sleeve_condition),
+    purchased: day(fm.purchased), forSale: num(fm.market_for_sale), myCopy: num(fm.price_my_copy_sek), checked: day(fm.price_checked),
     low: num(fm.price_low_sek), mid: num(fm.price_mid_sek), high: num(fm.price_high_sek),
     max: num(fm.price_max_sek) ?? num(fm.price_high_sek), list: num(fm.market_lowest_sek),
     year: num(fm.original_year) || num(fm.year), added: day(fm.purchased) || day(fm.added_to_discogs),
@@ -160,10 +166,13 @@ const card = (title, inner) => `<div class="card">${title ? `<div class="card-ti
 const section = (title, sub, inner) => `<section><h2>${esc(title)}</h2>${sub ? `<div class="sub">${esc(sub)}</div>` : ""}${inner}</section>`;
 const grid = (...cards) => `<div class="grid">${cards.join("")}</div>`;
 
+// The dashboard's sections and their styles, scoped to .mls-report so they can sit inside Obsidian.
 // records: decoded with decodeRecord. media: the bases' names in order. value: decodeCollectionValue.
-// theme: { fg, bg, muted, border, font } as hex colours and a font stack. stamp: when it was made.
-function buildReport(records, media, value, theme, stamp) {
+// theme: { fg, bg, muted, border, font } as hex colours and a font stack. interactive: album titles
+// become links (data-path) and the latest additions get a Listened checkbox, for the dashboard view.
+function reportParts(records, media, value, theme, interactive) {
   const P = palette(theme);
+  const album = (r) => (interactive && r.path ? `<a class="mls-open" data-path="${esc(r.path)}">${esc(r.title)}</a>` : esc(r.title));
   const MC = Object.fromEntries(media.map((m, i) => [m, P.ramp(media.length)[i]]));
   const recs = records.filter((r) => media.includes(r.media));
   const pill = (m) => `<span class="pill" style="background:${MC[m]};color:${P.ink(MC[m])}">${esc(m)}</span>`;
@@ -207,7 +216,7 @@ function buildReport(records, media, value, theme, stamp) {
     ) +
     card(`Top 20 albums by value (${haveSugg ? "Medium, VG+" : "cheapest listing"})`, table(
       ["#", "Album", "Artist", "Media", "Lowest", ...(haveSugg ? ["Medium"] : []), "Highest"],
-      top20.map((r, n) => [n + 1, esc(r.title), esc(r.artist), pill(r.media), kr(r.list), ...(haveSugg ? [kr(r.mid)] : []), kr(r.max)]),
+      top20.map((r, n) => [n + 1, album(r), esc(r.artist), pill(r.media), kr(r.list), ...(haveSugg ? [kr(r.mid)] : []), kr(r.max)]),
       haveSugg ? [0, 4, 5, 6] : [0, 4, 5])) +
     `<div class="sub">Lowest = cheapest copy on Discogs now. Highest = Discogs' Mint price suggestion. * Total highest = Discogs' own collection maximum.</div>`);
 
@@ -239,36 +248,48 @@ function buildReport(records, media, value, theme, stamp) {
       series: media.map((m) => ({ name: m, color: MC[m], values: months.map((mo) => recs.filter((r) => r.media === m && r.added.startsWith(mo)).length) })) })),
     card("Where you buy", barChart(P, { labels: shops.map((s) => s[0]), horizontal: true, height: 40 + shops.length * 24, xTitle: "Records bought",
       series: [{ name: "Records", colors: P.distinct(shops.length), values: shops.map((s) => s[1]) }] })),
-  ) + card("Latest additions — not listened to yet", table(["Date", "Album", "Artist", "Media"],
-    latest.map((r) => [r.added, esc(r.title), esc(r.artist), pill(r.media)]))));
+  ) + card("Latest additions — not listened to yet", table(["Date", "Album", "Artist", "Media", ...(interactive ? ["Listened"] : [])],
+    latest.map((r) => [r.added, album(r), esc(r.artist), pill(r.media),
+      ...(interactive ? [`<input type="checkbox" class="mls-listen" data-path="${esc(r.path)}" aria-label="Mark ${esc(r.title)} as listened to">`] : [])]))));
 
+  const R = ".mls-report";
   const css = `
+    ${R} { color: ${P.fg}; font-family: ${theme.font}; font-size: 12px; }
+    ${R} .sub { color: ${P.muted}; font-size: 11px; margin: 2px 0 10px; }
+    ${R} section { margin-bottom: 18px; break-inside: auto; }
+    ${R} h2 { font-size: 17px; margin: 0 0 2px; padding-left: 10px; border-left: 5px solid ${P.fg}; break-after: avoid; color: ${P.fg}; }
+    ${R} .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
+    ${R} .card { border: 1px solid ${P.border}; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; break-inside: avoid; }
+    ${R} .grid > .card { margin-bottom: 0; }
+    ${R} .grid + .card { margin-top: 12px; }
+    ${R} .card-title { font-weight: 700; margin-bottom: 6px; }
+    ${R} svg { display: block; width: 100%; height: auto; }
+    ${R} table { width: 100%; border-collapse: collapse; margin: 0; }
+    ${R} th { text-align: left; color: ${P.muted}; font-weight: 600; border-bottom: 1px solid ${P.border}; padding: 4px 6px; }
+    ${R} td { padding: 4px 6px; border-bottom: 1px solid ${P.border}; vertical-align: middle; color: ${P.fg}; }
+    ${R} tr { break-inside: avoid; }
+    ${R} .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    ${R} tr.total td { font-weight: 800; border-top: 2px solid ${P.border}; border-bottom: none; }
+    ${R} .pill { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+    ${R} a.mls-open { color: ${P.fg}; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }`;
+  const body = recs.length ? overview + valueSection + contents + decades + artists + buying
+    : section("No records", "", `<p>No record notes found in ${esc(media.join(", ") || "any base")}. Run Sync from Discogs.</p>`);
+  return { body, css };
+}
+
+// The dashboard as a standalone page, for PDF export.
+function buildReport(records, media, value, theme, stamp) {
+  const { body, css } = reportParts(records, media, value, theme, false);
+  const P = palette(theme);
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Music Dashboard</title><style>
     @page { margin: 0; }
-    html, body { background: ${P.bg}; color: ${P.fg}; margin: 0; }
-    body { font-family: ${theme.font}; font-size: 12px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    html, body { background: ${P.bg}; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px solid ${P.fg}; padding-bottom: 8px; margin-bottom: 14px; }
     header h1 { margin: 0; font-size: 26px; }
-    header span, .sub { color: ${P.muted}; }
-    .sub { font-size: 11px; margin: 2px 0 10px; }
-    section { margin-bottom: 18px; break-inside: auto; }
-    h2 { font-size: 17px; margin: 0 0 2px; padding-left: 10px; border-left: 5px solid ${P.fg}; break-after: avoid; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
-    .card { border: 1px solid ${P.border}; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; break-inside: avoid; }
-    .grid > .card { margin-bottom: 0; }
-    .grid + .card { margin-top: 12px; }
-    .card-title { font-weight: 700; margin-bottom: 6px; }
-    svg { display: block; width: 100%; height: auto; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; color: ${P.muted}; font-weight: 600; border-bottom: 1px solid ${P.border}; padding: 4px 6px; }
-    td { padding: 4px 6px; border-bottom: 1px solid ${P.border}; vertical-align: middle; }
-    tr { break-inside: avoid; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    tr.total td { font-weight: 800; border-top: 2px solid ${P.border}; border-bottom: none; }
-    .pill { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }`;
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Music Dashboard</title><style>${css}</style></head><body>
-<header><h1>Music Dashboard</h1><span>Exported ${esc(stamp)}</span></header>
-${recs.length ? overview + valueSection + contents + decades + artists + buying : section("No records", "", `<p>No record notes found in ${esc(media.join(", ") || "any base")}.</p>`)}
+    header span { color: ${P.muted}; }${css}</style></head><body>
+<div class="mls-report"><header><h1>Music Dashboard</h1><span>Exported ${esc(stamp)}</span></header>
+${body}</div>
 </body></html>`;
 }
 
-module.exports = { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, tracklist };
+module.exports = { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, esc, kr };

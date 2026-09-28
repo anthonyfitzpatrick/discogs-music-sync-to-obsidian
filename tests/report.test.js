@@ -1,7 +1,7 @@
 // Tests src/report.js directly: the PDF report is built without Obsidian, Dataview or Charts.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, tracklist } = require("../src/report.js");
+const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist } = require("../src/report.js");
 
 const THEME = { fg: "#33ff66", bg: "#0a0f06", muted: "#4fcc77", border: "#1a5530", font: "Monaco, monospace" };
 const BODY = `# A – B
@@ -72,4 +72,25 @@ test("the report copes with no records and with records lacking prices", () => {
     ["Vinyl"], decodeCollectionValue(null), THEME, "now");
   assert.match(html, /cheapest listing/, "falls back to cheapest listings without price suggestions");
   assert.doesNotMatch(html, /NaN|undefined|Infinity/);
+});
+
+test("in the dashboard view, albums open their notes and new records can be ticked as listened", () => {
+  const records = [decodeRecord({ title: "T", artist: "A", purchased: "2026-09-01", price_mid_sek: 10 }, "Vinyl", "", "x", 'Music/Vinyl/A "quoted" <note>.md')];
+  const { body, css } = reportParts(records, ["Vinyl"], decodeCollectionValue(null), THEME, true);
+  assert.match(body, /<a class="mls-open" data-path="Music\/Vinyl\/A &quot;quoted&quot; &lt;note&gt;\.md">T<\/a>/, "the path is escaped");
+  assert.match(body, /<input type="checkbox" class="mls-listen" data-path="Music\/Vinyl\/A &quot;quoted&quot; &lt;note&gt;\.md"/);
+  assert.doesNotMatch(buildReport(records, ["Vinyl"], decodeCollectionValue(null), THEME, "now"), /class="mls-open"|class="mls-listen"/, "the PDF has neither");
+  assert.ok(css.split("}").filter((r) => r.trim()).every((r) => r.trim().startsWith(".mls-report")), "every style is scoped to the report");
+});
+
+test("the report's styles have no declarations outside a rule", () => {
+  // Leftover declarations with no selector swallow the next rule; it happened to the old dashboard's table.
+  const { css } = reportParts([rec({})], ["Vinyl"], decodeCollectionValue(null), THEME, true);
+  let depth = 0, selector = "";
+  for (const ch of css) {
+    if (ch === "{") { if (depth++ === 0) { assert.doesNotMatch(selector, /;/, selector.trim()); selector = ""; } }
+    else if (ch === "}") { assert.ok(depth > 0); depth--; }
+    else if (depth === 0) selector += ch;
+  }
+  assert.strictEqual(depth, 0);
 });

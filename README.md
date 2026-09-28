@@ -1,6 +1,6 @@
 # Discogs music sync and dashboard
 
-An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, a `.base` view for each collection, and a live Music Dashboard.
+An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, with a Music Dashboard and a Music Library built in. It needs no other plugin, and puts nothing in your vault except your record notes and their images.
 
 The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its folder in `.obsidian/plugins/`, is `music-library-sync`.
 
@@ -8,21 +8,21 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 
 - **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in SEK.
 - **Genius lyrics links.** Each track links to its lyrics on Genius where a match is found.
-- **Bases, sorted by format.** Each base takes the records of the formats you choose (Vinyl, CD, Cassette…) from anywhere in your Discogs collection, into its own folder with its own tag and `.base` view, and appears on the dashboard. Placement is automatic: you don't need to file records into folders on Discogs, and formats are picked from the ones in your collection, never typed.
+- **Bases, sorted by format.** Each base takes the records of the formats you choose (Vinyl, CD, Cassette…) from anywhere in your Discogs collection, into its own folder with its own tag. Placement is automatic: you don't need to file records into folders on Discogs, and formats are picked from the ones in your collection, never typed.
 - **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to `Music/Removed from collection`, never deleted.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
-- **Music Dashboard.** Record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and a list of new records you haven't listened to yet. It is coloured by your active Obsidian theme.
-- **PDF export.** Saves the dashboard as a PDF in the paper size and orientation you choose. The plugin builds the report and draws its charts itself, so PDF export needs no other plugin.
-- **Sync panel.** Buttons, progress and a log, in any note, through a `music-sync` code block.
+- **Music Dashboard.** A view built into the plugin: record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and new records you haven't listened to yet, with its own charts. Albums open their notes. Coloured by your active Obsidian theme.
+- **Music Library.** A view built into the plugin to browse your records by base: a gallery of covers, by genre, a catalogue table, a value table, or the ones not ripped yet, with search and sorting.
+- **PDF export.** Saves the dashboard as a PDF in the paper size and orientation you choose.
+- **Sync panel.** Buttons, progress and a log at the top of the dashboard, or in any note through a `music-sync` code block.
 
 ## Requirements
 
-- Obsidian 1.9 or later (for Bases), desktop only (macOS, Windows or Linux).
+- Obsidian 1.9 or later, desktop only (macOS, Windows or Linux).
 - A Discogs account and a personal access token.
-- For the live dashboard note only: the **Dataview** community plugin (with JavaScript queries enabled) and the **Charts** community plugin. Syncing and PDF export work without them.
 - Optional: a Genius API access token, for lyrics links.
 
-No Python or other tools are needed. The plugin is plain JavaScript with no build step.
+No other plugin is needed.
 
 ## Installation
 
@@ -35,15 +35,15 @@ No Python or other tools are needed. The plugin is plain JavaScript with no buil
 1. Open **Settings → Discogs music sync and dashboard**.
 2. Enter your Discogs username, paste your personal access token and press **Test**.
 3. Under **Bases**, press **Set up from Discogs** and tick the formats to sync.
-4. Run **Sync from Discogs** from the command palette.
-5. Press the disc icon in the ribbon to open the Music Dashboard.
+4. Press the disc icon in the ribbon to open the Music Dashboard, and press **Sync from Discogs**.
+5. Press the library icon to browse your records.
 
 The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 
 ## Privacy and security
 
-- The plugin talks only to `api.discogs.com` and `api.genius.com`, and only when you start a sync, a price refresh, a dashboard rebuild or a connection test.
-- Tokens are stored in `Music/.discogs-token` and `Music/.genius-token` in your vault, never in the plugin's `data.json`. If your vault is in git, add both files to `.gitignore`.
+- The plugin talks only to `api.discogs.com` and `api.genius.com`, and only when you start a sync, a price or value refresh, set up or edit bases, or test a token.
+- Tokens are kept in Obsidian's local storage for the vault on this device: never in a file, the vault or the plugin's `data.json`, so never in git or a shared sync.
 - Nothing is sent anywhere else, and there is no telemetry.
 
 ## Known limitations
@@ -51,7 +51,8 @@ The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 - Prices are in Swedish kronor (SEK).
 - Discogs price suggestions (the Low, Mid, High and Mint estimates) only appear once your Discogs Seller Settings are filled in. Without them, the dashboard uses the cheapest current listing instead.
 - The Music folder is fixed at `Music/` in the root of the vault.
-- Renaming a base renames its `.base` file, but its notes stay in their original folder.
+- Renaming a base doesn't move its notes to a folder of the new name.
+- Tokens are kept per device: enter them on each computer you use.
 - Desktop only, because PDF export uses Electron.
 
 ## Feedback
@@ -60,16 +61,16 @@ Use **Report a bug** or **Request a feature** at the bottom of the plugin's sett
 
 ## Development
 
-The source is in `src/`. `npm run build` bundles it, with the dashboard template, into `main.js`.
+The source is in `src/`. `npm run build` bundles it into `main.js`.
 
 ```
 npm install      # also points git at the pre-commit hook in hooks/
-npm run lint     # oxlint with the anti-slop rules, over src/, tests/ and the dashboard's code
+npm run lint     # oxlint with the anti-slop rules
 npm test         # builds, then runs the tests in tests/
 npm run check    # both
 ```
 
-Lint uses the [anti-slop](https://github.com/dmmulroy/anti-slop) rule set, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`. The dashboard's JavaScript sits inside `src/dashboard-template.md`, so `scripts/lint-dashboard.mjs` lints it separately. The pre-commit hook and CI both run lint and the tests.
+Lint uses the [anti-slop](https://github.com/dmmulroy/anti-slop) rule set, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`. The pre-commit hook and CI both run lint and the tests.
 
 To release, set the same version in `manifest.json`, `package.json` and `versions.json`, commit, and push a tag with that version (for example `0.9.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`.
 

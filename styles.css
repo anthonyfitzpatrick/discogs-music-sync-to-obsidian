@@ -303,3 +303,30 @@
 /* Keep the Notes heading compact when the section is empty */
 .vinyl-record .markdown-preview-sizer > div:has(> h2[data-heading="Notes"]):last-of-type h2,
 .vinyl-record h2[data-heading="Notes"] { margin-bottom: 0.25em; }
+
+/* v0.11: the Music Dashboard and Music Library views */
+.mls-view { padding: 16px 20px 40px; }
+.mls-view .mls-report { margin-top: 8px; }
+.mls-library-bar { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; margin-bottom: 14px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--background-modifier-border); }
+.mls-library-field { display: flex; flex-direction: column; gap: 3px; font-size: var(--font-ui-smaller); color: var(--text-muted); }
+.mls-library-search { flex: 1 1 220px; min-width: 180px; }
+.mls-library-count { color: var(--text-muted); font-size: var(--font-ui-small); margin-left: auto; }
+.mls-library-empty { color: var(--text-muted); }
+.mls-library-group { margin: 18px 0 8px; font-size: var(--font-ui-large); color: var(--text-normal); }
+.mls-library-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+.mls-card { display: block; text-decoration: none; color: var(--text-normal); }
+.mls-card:hover .mls-card-title { text-decoration: underline; }
+.mls-card img, .mls-card-nocover { width: 100%; aspect-ratio: 1; object-fit: cover; display: block;
+  border: 1px solid var(--background-modifier-border); border-radius: var(--radius-s); background: var(--background-secondary); }
+.mls-card-nocover { display: grid; place-items: center; color: var(--text-faint); }
+.mls-card-nocover svg { width: 40%; height: 40%; }
+.mls-card-title { font-weight: 600; font-size: var(--font-ui-small); margin-top: 6px; line-height: 1.25; }
+.mls-card-sub { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.mls-library-table { width: 100%; border-collapse: collapse; font-size: var(--font-ui-small); }
+.mls-library-table th { text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--background-modifier-border); padding: 5px 8px; white-space: nowrap; }
+.mls-library-table td { padding: 5px 8px; border-bottom: 1px solid var(--background-modifier-border); color: var(--text-normal); }
+.mls-library-table tr:hover td { background: var(--background-modifier-hover); }
+.mls-library-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mls-library-table a { color: var(--text-normal); font-weight: 600; }
+.mls-legacy-list { margin: 4px 0 8px; color: var(--text-muted); font-size: var(--font-ui-small); }
