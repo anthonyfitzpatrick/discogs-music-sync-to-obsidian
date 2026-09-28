@@ -10,7 +10,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const DEFAULT_FOLDER = "Music";
 // A folder path as typed, cleaned: no leading/trailing slashes, single slashes, no empty parts.
 const cleanFolder = (v) => String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
-const VERSION = "0.12.0";
+const VERSION = "0.12.1";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
@@ -1072,7 +1072,7 @@ class MusicSettingTab extends PluginSettingTab {
     }
 
     new Setting(el).setName("Sync").setHeading();
-    new Setting(el).setName("Download all images").setDesc("Save every Discogs photo (back cover, labels, inserts) with a new record, not just the front cover.")
+    new Setting(el).setName("Download all images").setDesc("On: save every Discogs photo of a new record (back cover, labels, inserts). Off: save only its front cover.")
       .addToggle((t) => t.setValue(d.gallery).onChange(async (x) => { d.gallery = x; await P.save(); }));
 
     new Setting(el).setName("PDF export").setHeading();

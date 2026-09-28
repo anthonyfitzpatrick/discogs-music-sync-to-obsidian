@@ -43,7 +43,7 @@ function decodeRecord(fm, media, body, fallbackTitle, path = "") {
     discogsFormat: primaryFormat(fm.format, fm.media),
     mediaCondition: text(fm.media_condition), sleeveCondition: text(fm.sleeve_condition),
     purchased: day(fm.purchased), forSale: num(fm.market_for_sale), myCopy: num(fm.price_my_copy_sek), checked: day(fm.price_checked),
-    paid: num(fm.price_paid_sek), listenedOn: day(fm.listened_on), releaseYear: num(fm.year), originalYear: num(fm.original_year),
+    paid: num(fm.price_paid_sek), releaseYear: num(fm.year), originalYear: num(fm.original_year),
     compilation: /\bcompilation\b/i.test(text(fm.format)),
     reissue: /\b(reissue|repress|remaster(ed)?)\b/i.test(text(fm.format)) || (num(fm.year) !== null && num(fm.original_year) !== null && num(fm.year) > num(fm.original_year)),
     low: num(fm.price_low_sek), mid: num(fm.price_mid_sek), high: num(fm.price_high_sek),
@@ -454,14 +454,8 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
     },
 
     listening() {
-      const heard = recs.filter((r) => r.listened);
-      const row = (label, g) => [esc(label), int(g.filter((r) => r.listened).length), int(g.length), g.length ? pct(g.filter((r) => r.listened).length / g.length) : "—"];
-      const months = [...new Set(heard.map((r) => r.listenedOn.slice(0, 7)).filter(Boolean))].sort().slice(-12);
       const waiting = recs.filter((r) => !r.listened && r.added).sort((a, b) => a.added.localeCompare(b.added)).slice(0, 10);
-      return section("Listening", "Records ticked as listened to on the dashboard", grid(
-        card("Listened so far", table(["Base", "Listened", "Records", "Share"], [...media.map((m) => row(m, recs.filter((r) => r.media === m))), row("Total", recs)], [1, 2, 3], true)),
-        card("Listened per month", months.length ? barChart(P, { labels: months, yTitle: "Records", series: [{ name: "Listened", color: P.fg, values: months.map((mo) => heard.filter((r) => r.listenedOn.startsWith(mo)).length) }] }) : note("Tick records as listened to on the dashboard to see this.")),
-      ) + card("Waiting longest: owned longest, not listened to yet", waiting.length
+      return section("Listening", "Records not yet ticked as listened to", card("Waiting longest: owned longest, not listened to yet", waiting.length
         ? table(["Owned since", "Album", "Artist", "Media", ...(interactive ? ["Listened"] : [])], waiting.map((r) => [r.added, album(r), esc(r.artist), pill(r.media), ...(interactive ? [listenBox(r)] : [])]))
         : note("Every record has been listened to.")));
     },

@@ -179,7 +179,7 @@ Text, lines and backgrounds always follow your theme.
 
 ### 5.7 Sync
 
-- **Download all images**: when on, every Discogs photo of a new record is saved and shown under **Images** in its note. When off, only the front cover is downloaded, which makes syncing faster and uses less space.
+- **Download all images**: when on, every Discogs photo of a new record (back cover, labels, inserts) is saved and shown under **Images** in its note. When off, only the single front cover is downloaded, which makes syncing faster and uses less space.
 
 ### 5.8 PDF export
 
@@ -480,9 +480,7 @@ Uses the `price_paid_sek` property, which you fill in yourself. Until a record h
 
 ### 10.12 Listening
 
-- **Listened so far**: per base and in all, from the Listened ticks.
-- **Listened per month**: the last twelve months, from `listened_on`.
-- **Waiting longest**: the records you've owned longest without listening to them, with a Listened box.
+**Waiting longest**: the ten records you've owned longest without listening to them, with a Listened box to tick them off.
 
 ### 10.13 Condition
 

@@ -359,3 +359,25 @@ test("the dashboard gets the sections, colours and history from settings, colour
   p.data.libraries[1].name = "Compact discs";
   assert.strictEqual(p.reportOptions().colours.bases[1], "#123456", "renaming a base keeps its colour");
 });
+
+test("with Download all images off, a new record gets only its front cover", async () => {
+  const photos = [{ type: "secondary", uri: "https://i.discogs.com/back.jpg" }, { type: "primary", uri: "https://i.discogs.com/front.jpg" }, { type: "secondary", uri: "https://i.discogs.com/label.png" }];
+  for (const gallery of [false, true]) {
+    const vault = makeVault();
+    const { eng } = makeEngine(vault, [VINYL], [item(1, ["Vinyl"])]);
+    eng.cfg.gallery = gallery;
+    const release = eng.discogs;
+    const fetched = [];
+    eng.discogs = async (url, binary) => { if (binary) { fetched.push(url); return new ArrayBuffer(1); } const r = await release(url); return url.startsWith("releases/") ? { ...r, images: photos } : r; };
+    await eng.syncAll();
+    const saved = [...vault.files.values()].filter((f) => f.text === "<binary>").map((f) => f.path).sort();
+    if (!gallery) {
+      assert.deepStrictEqual(fetched, ["https://i.discogs.com/front.jpg"], "only the front cover is downloaded");
+      assert.deepStrictEqual(saved, ["Music/Vinyl/covers/10.jpg"]);
+      assert.match([...vault.files.values()].find((f) => /Release 10/.test(f.text ?? "")).text, /Images not downloaded/);
+    } else {
+      assert.strictEqual(fetched.length, 4, "the cover, then every photo");
+      assert.strictEqual(saved.filter((p) => p.includes("/images/")).length, 3);
+    }
+  }
+});

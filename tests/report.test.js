@@ -150,7 +150,9 @@ test("the market, pressings, spending, listening, condition and attention figure
   assert.match(part("Pressings", "By decade"), /Compilation — 50% \(1\)/);
   assert.match(part("Spending", "Listening"), /Total paid<\/td><td class="num">150 kr/);
   assert.match(part("Spending", "Listening"), /Gain or loss<\/td><td class="num">\+450 kr \(300%\)/);
-  assert.match(part("Listening", "Condition"), /<td>Total<\/td><td class="num">1<\/td><td class="num">2<\/td><td class="num">50%<\/td>/);
+  const listening = part("Listening", "Condition");
+  assert.match(listening, /Waiting longest[\s\S]*Common Two/, "not listened to, so waiting");
+  assert.doesNotMatch(listening, /Rare One|Listened so far|Listened per month/);
   assert.match(part("Condition", "Needs attention"), /1 of 2 records are graded/);
   const attention = part("Needs attention");
   assert.match(attention, /No purchase date<\/td><td class="num">1<\/td><td>Common Two/);
