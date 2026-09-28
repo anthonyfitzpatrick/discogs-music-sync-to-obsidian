@@ -20,6 +20,7 @@ jobs:
           node-version: "24"
           cache: npm
       - run: npm ci
+      - run: npm run lint
 
       - name: Check the tag matches manifest.json and versions.json
         run: |

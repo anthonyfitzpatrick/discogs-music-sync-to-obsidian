@@ -60,12 +60,16 @@ Use **Report a bug** or **Request a feature** at the bottom of the plugin's sett
 
 ## Development
 
-The source is in `src/`. `npm run build` bundles it, with the dashboard template, into `main.js`; `npm test` builds and runs the tests in `tests/`.
+The source is in `src/`. `npm run build` bundles it, with the dashboard template, into `main.js`.
 
 ```
-npm install
-npm test
+npm install      # also points git at the pre-commit hook in hooks/
+npm run lint     # oxlint with the anti-slop rules, over src/, tests/ and the dashboard's code
+npm test         # builds, then runs the tests in tests/
+npm run check    # both
 ```
+
+Lint uses the [anti-slop](https://github.com/dmmulroy/anti-slop) rule set, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`. The dashboard's JavaScript sits inside `src/dashboard-template.md`, so `scripts/lint-dashboard.mjs` lints it separately. The pre-commit hook and CI both run lint and the tests.
 
 To release, set the same version in `manifest.json`, `package.json` and `versions.json`, commit, and push a tag with that version (for example `0.9.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`.
 

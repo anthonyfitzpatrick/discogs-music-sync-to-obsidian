@@ -35,11 +35,12 @@ const lum = (hex) => { const h = hex.replace("#", ""); const [r, g, b] = [0, 2, 
   .map((c) => (c <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)); return .2126 * r + .7152 * g + .0722 * b; };
 const ink = (hex) => (Math.abs(lum(hex) - lum(FG)) > Math.abs(lum(hex) - lum(BG)) ? FG : BG);   // theme text or background, whichever reads on the fill
 const kr = (v) => v == null || v === "" ? "—" : `${Math.round(v).toLocaleString("sv-SE")} kr`;
-const num = (v) => (typeof v === "number" && !isNaN(v) ? v : null);
+// Frontmatter values arrive as whatever was typed. Decode each number once, here: a finite number, or null.
+const num = (v) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 const count = (arr) => { const m = new Map(); arr.forEach((x) => m.set(x, (m.get(x) || 0) + 1)); return [...m].sort((a, b) => b[1] - a[1]); };
 const ym = (d) => !d ? "" : d.toFormat ? d.toFormat("yyyy-MM") : String(d).slice(0, 7);
 const ymd = (d) => !d ? "" : d.toFormat ? d.toFormat("yyyy-MM-dd") : String(d).slice(0, 10);
-const has = typeof window.renderChart === "function";
+const has = app.plugins.enabledPlugins.has("obsidian-charts");
 const open = (el, file) => el.addEventListener("click", (e) => { e.preventDefault(); app.workspace.openLinkText(file, dv.current().file.path, e.ctrlKey || e.metaKey); });
 
 // ---------- wait for Dataview to finish indexing (e.g. right after Obsidian starts) ----------
@@ -61,7 +62,7 @@ const recs = dv.pages(Object.keys(TAGS).join(" or ")).array().map((p) => {
            year: num(p.original_year) || num(p.year), added: p.purchased || p.added_to_discogs };
 });
 // tracks + playing time come from each note's tracklist table
-let tracks = 0, secs = 0, linked = 0; const perMedia = {};
+let tracks = 0, secs = 0, linked = 0;
 const TC = (window.musicDashTrackCache ||= new Map());           // path -> {mtime, tracks, secs, linked}
 for (const r of recs) {
   const mt = r.p.file.mtime?.toMillis?.() ?? 0, hit = TC.get(r.p.file.path);
@@ -78,7 +79,8 @@ const sum = (arr, k) => arr.reduce((a, r) => a + (r[k] || 0), 0);
 
 const haveSugg = recs.some((r) => r.mid != null);
 let cur = {};
-try { cur = JSON.parse(await app.vault.adapter.read("Music/.vinyl-sync/collection-value.json")); } catch (e) {}
+try { cur = JSON.parse(await app.vault.adapter.read("Music/.vinyl-sync/collection-value.json")); }
+catch { cur = {}; }   // not fetched yet (first rebuild, or Discogs unreachable): the Discogs value columns show "—"
 
 // ---------- layout helpers ----------
 const root = dv.el("div", "", { cls: "md-root" });
@@ -88,7 +90,7 @@ root.createEl("style", { text: `
   .md-root table.md-table td:nth-child(2) { white-space: normal; }
   .md-root input.md-listen { width: 18px; height: 18px; cursor: pointer; margin: 0; }
 ` });
-root.createEl("style", { text: "/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Music Dashboard (dataviewjs) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n.md-root { display: flex; flex-direction: column; gap: 26px; }\n.md-root .md-section h2 { margin: 0 0 2px; font-size: 1.35em; font-weight: 800; color: var(--text-normal);\n  padding-left: 12px; border-left: 5px solid; border-image: linear-gradient(180deg, var(--text-normal), var(--text-muted), var(--background-modifier-border)) 1; }\n.md-root .md-sub { color: var(--text-muted); font-size: var(--font-ui-small); margin-bottom: 12px; }\n.md-root .md-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }\n.md-root .md-card { background: var(--background-secondary); border: 1px solid var(--background-modifier-border);\n  border-radius: 16px; padding: 14px 16px; box-shadow: 0 4px 14px -8px rgba(0,0,0,.25); margin-bottom: 16px; }\n.md-root .md-grid > .md-card { margin-bottom: 0; }\n.md-root .md-card-title { font-weight: 700; margin-bottom: 8px; }\n.md-root .md-chart { position: relative; width: 100%; }\n  background: linear-gradient(135deg, var(--tile), color-mix(in srgb, var(--tile) 70%, var(--background-primary) 30%));\n  box-shadow: 0 8px 20px -10px var(--tile); }\n.md-root .md-table { width: 100%; border-collapse: collapse; font-size: var(--font-ui-small); }\n.md-root .md-table th { text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--background-modifier-border); padding: 6px; }\n.md-root .md-table td { padding: 6px; border-bottom: 1px solid var(--background-modifier-border-hover, var(--background-modifier-border)); vertical-align: middle; }\n.md-root .md-table tr:hover td { background: var(--background-modifier-hover); }\n.md-root .md-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }\n.md-root .md-pill { color: var(--text-on-accent); font-size: var(--font-ui-smaller); font-weight: 700; padding: 2px 8px; border-radius: 999px; }\n\n.md-root .md-table tr.md-total td { font-weight: 800; border-top: 2px solid var(--background-modifier-border); border-bottom: none; }\n\n/* readability fixes */\n.md-root .md-card { color: var(--text-normal); }\n.md-root .md-card-title { color: var(--text-normal); }\n.md-root .md-sub { color: var(--text-muted); }\n.md-root .md-table th { color: var(--text-muted); }\n.md-root .md-table td { color: var(--text-normal); }\n.md-root .md-table a.internal-link { color: var(--text-normal); font-weight: 600; text-decoration: underline;\n  text-decoration-color: color-mix(in srgb, var(--interactive-accent) 60%, transparent); text-underline-offset: 3px; }\n.md-root .md-table a.internal-link:hover { color: var(--interactive-accent); }\n.md-root .md-pill { display: inline-block; }\n\n.md-root .md-section { padding: 16px 18px; border-radius: 16px; background: var(--background-primary-alt, rgba(0,0,0,.03));\n  border: 1px solid var(--background-modifier-border); }\n.md-root .md-card { background: var(--background-primary); }\n.md-root .md-table { margin: 0; }\n.md-root .md-table th, .md-root .md-table td { border-left: none !important; border-right: none !important; }\n" });
+root.createEl("style", { text: "/* \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Music Dashboard (dataviewjs) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */\n.md-root { display: flex; flex-direction: column; gap: 26px; }\n.md-root .md-section h2 { margin: 0 0 2px; font-size: 1.35em; font-weight: 800; color: var(--text-normal);\n  padding-left: 12px; border-left: 5px solid; border-image: linear-gradient(180deg, var(--text-normal), var(--text-muted), var(--background-modifier-border)) 1; }\n.md-root .md-sub { color: var(--text-muted); font-size: var(--font-ui-small); margin-bottom: 12px; }\n.md-root .md-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }\n.md-root .md-card { background: var(--background-secondary); border: 1px solid var(--background-modifier-border);\n  border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow-s); margin-bottom: 16px; }\n.md-root .md-grid > .md-card { margin-bottom: 0; }\n.md-root .md-card-title { font-weight: 700; margin-bottom: 8px; }\n.md-root .md-chart { position: relative; width: 100%; }\n.md-root .md-table { width: 100%; border-collapse: collapse; font-size: var(--font-ui-small); }\n.md-root .md-table th { text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--background-modifier-border); padding: 6px; }\n.md-root .md-table td { padding: 6px; border-bottom: 1px solid var(--background-modifier-border-hover, var(--background-modifier-border)); vertical-align: middle; }\n.md-root .md-table tr:hover td { background: var(--background-modifier-hover); }\n.md-root .md-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }\n.md-root .md-pill { color: var(--text-on-accent); font-size: var(--font-ui-smaller); font-weight: 700; padding: 2px 8px; border-radius: 999px; }\n\n.md-root .md-table tr.md-total td { font-weight: 800; border-top: 2px solid var(--background-modifier-border); border-bottom: none; }\n\n/* readability fixes */\n.md-root .md-card { color: var(--text-normal); }\n.md-root .md-card-title { color: var(--text-normal); }\n.md-root .md-sub { color: var(--text-muted); }\n.md-root .md-table th { color: var(--text-muted); }\n.md-root .md-table td { color: var(--text-normal); }\n.md-root .md-table a.internal-link { color: var(--text-normal); font-weight: 600; text-decoration: underline;\n  text-decoration-color: color-mix(in srgb, var(--interactive-accent) 60%, transparent); text-underline-offset: 3px; }\n.md-root .md-table a.internal-link:hover { color: var(--interactive-accent); }\n.md-root .md-pill { display: inline-block; }\n\n.md-root .md-section { padding: 16px 18px; border-radius: 16px; background: var(--background-primary-alt, rgba(0,0,0,.03));\n  border: 1px solid var(--background-modifier-border); }\n.md-root .md-card { background: var(--background-primary); }\n.md-root .md-table { margin: 0; }\n.md-root .md-table th, .md-root .md-table td { border-left: none !important; border-right: none !important; }\n" });
 const section = (title, sub) => { const s = root.createDiv({ cls: "md-section" }); s.createEl("h2", { text: title }); if (sub) s.createDiv({ cls: "md-sub", text: sub }); return s; };
 const grid = (parent, cls = "md-grid") => parent.createDiv({ cls });
 const card = (parent, title) => { const c = parent.createDiv({ cls: "md-card" }); if (title) c.createDiv({ cls: "md-card-title", text: title }); return c; };
@@ -147,12 +149,6 @@ const pie = (parent, labels, values, colors) => {
       tooltip: { callbacks: { label: (c) => ` ${c.raw} records (${pctText(c.raw / tot)})` } } } } }, 380);
 };
 const axTitle = (text) => ({ display: true, text, color: TXT, font: { size: 12, weight: "600" }, padding: { top: 6, bottom: 4 } });
-const tile = (parent, label, value, hint, color) => {
-  const t = parent.createDiv({ cls: "md-tile" }); t.style.setProperty("--tile", color);
-  t.createDiv({ cls: "md-tile-label", text: label }); t.createDiv({ cls: "md-tile-value", text: value });
-  if (hint) t.createDiv({ cls: "md-tile-hint", text: hint });
-};
-
 // simple table helper
 const table = (parent, head, rows, numCols = []) => {
   const t = parent.createEl("table", { cls: "md-table" });
@@ -179,7 +175,6 @@ const sv = section("Value spread", "How the value of your collection is spread a
 const VK = haveSugg ? "mid" : "list";                      // value used for "typical record" & Top 20
 const vals = recs.map((r) => r[VK]).filter((v) => v != null).sort((a, b) => a - b);
 const q = (p) => vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : null;
-const listed = sum(recs, "list");
 table(card(sv, "Whole collection"), ["", "Low", "Medium", "High"], [
   ["Discogs collection value", kr(cur.discogs_value_min), kr(cur.discogs_value_median), kr(cur.discogs_value_max)],
   ...(haveSugg ? [["Sum of per-album estimates", kr(sum(recs, "low")), kr(sum(recs, "mid")), kr(sum(recs, "high"))]] : []),

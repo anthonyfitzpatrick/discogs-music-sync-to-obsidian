@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Blocks the commit unless lint (anti-slop included, dashboard code included) and the tests pass.
+# Version-controlled; `npm install` points git at this folder through the "prepare" script.
+# CI runs the same checks as a backstop for --no-verify.
+set -e
+echo "pre-commit: lint"
+npm run --silent lint
+echo "pre-commit: test"
+npm test --silent >/dev/null
+echo "pre-commit: OK"

@@ -79,57 +79,6 @@
 }
 @media (max-width: 600px) { .mls-btn { flex: 1 1 100%; justify-content: center; } }
 
-/* ───────── Music Dashboard (dataviewjs) ───────── */
-.md-root { display: flex; flex-direction: column; gap: 26px; }
-.md-root .md-section h2 { margin: 0 0 2px; font-size: 1.35em; font-weight: 800; color: var(--text-normal);
-  padding-left: 12px; border-left: 5px solid; border-image: linear-gradient(180deg, var(--text-normal), var(--text-muted), var(--background-modifier-border)) 1; }
-.md-root .md-sub { color: var(--text-muted); font-size: var(--font-ui-small); margin-bottom: 12px; }
-.md-root .md-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 16px; }
-.md-root .md-card { background: var(--background-secondary); border: 1px solid var(--background-modifier-border);
-  border-radius: 16px; padding: 14px 16px; box-shadow: var(--shadow-s); margin-bottom: 16px; }
-.md-root .md-grid > .md-card { margin-bottom: 0; }
-.md-root .md-card-title { font-weight: 700; margin-bottom: 8px; }
-.md-root .md-chart { position: relative; width: 100%; }
-.md-root .md-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
-.md-root .md-tile { --tile: var(--text-normal); border-radius: 16px; padding: 14px 16px; color: var(--background-primary);
-  background: linear-gradient(135deg, var(--tile), color-mix(in srgb, var(--tile) 70%, var(--background-primary) 30%));
-  box-shadow: 0 8px 20px -10px var(--tile); }
-.md-root .md-tile-label { font-size: var(--font-ui-small); opacity: .9; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
-.md-root .md-tile-value { font-size: 1.7em; font-weight: 800; line-height: 1.2; margin-top: 4px; }
-.md-root .md-tile-hint { font-size: var(--font-ui-smaller); opacity: .9; margin-top: 4px; }
-.md-root .md-table { width: 100%; border-collapse: collapse; font-size: var(--font-ui-small); }
-.md-root .md-table th { text-align: left; color: var(--text-muted); font-weight: 600; border-bottom: 1px solid var(--background-modifier-border); padding: 6px; }
-.md-root .md-table td { padding: 6px; border-bottom: 1px solid var(--background-modifier-border-hover, var(--background-modifier-border)); vertical-align: middle; }
-.md-root .md-table tr:hover td { background: var(--background-modifier-hover); }
-.md-root .md-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.md-root .md-thumb { width: 38px; height: 38px; object-fit: cover; border-radius: 6px; display: block; }
-.md-root .md-pill { color: var(--text-on-accent); font-size: var(--font-ui-smaller); font-weight: 700; padding: 2px 8px; border-radius: 999px; }
-.md-root .md-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 14px; }
-.md-root .md-cover { text-decoration: none; color: var(--text-normal); display: block; }
-.md-root .md-cover img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; box-shadow: var(--shadow-s); transition: transform .15s; }
-.md-root .md-cover:hover img { transform: translateY(-3px) rotate(-1deg); }
-.md-root .md-cover-title { font-weight: 700; font-size: var(--font-ui-small); margin-top: 6px; line-height: 1.25; }
-.md-root .md-cover-sub { color: var(--text-muted); font-size: var(--font-ui-smaller); }
-.md-root .md-health { display: grid; grid-template-columns: 200px 1fr 110px; align-items: center; gap: 12px; padding: 6px 0; }
-.md-root .md-health-label { font-weight: 600; font-size: var(--font-ui-small); }
-.md-root .md-health-bar { height: 10px; border-radius: 999px; background: var(--background-modifier-border); overflow: hidden; }
-.md-root .md-health-bar > div { height: 100%; border-radius: 999px; }
-.md-root .md-health-num { text-align: right; color: var(--text-muted); font-size: var(--font-ui-small); font-variant-numeric: tabular-nums; }
-@media (max-width: 600px) { .md-root .md-health { grid-template-columns: 1fr; gap: 4px; } }
-
-.md-root .md-table tr.md-total td { font-weight: 800; border-top: 2px solid var(--background-modifier-border); border-bottom: none; }
-
-/* readability fixes */
-.md-root .md-card { color: var(--text-normal); }
-.md-root .md-card-title { color: var(--text-normal); }
-.md-root .md-sub { color: var(--text-muted); }
-.md-root .md-table th { color: var(--text-muted); }
-.md-root .md-table td { color: var(--text-normal); }
-.md-root .md-table a.internal-link { color: var(--text-normal); font-weight: 600; text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--interactive-accent) 60%, transparent); text-underline-offset: 3px; }
-.md-root .md-table a.internal-link:hover { color: var(--interactive-accent); }
-.md-root .md-pill { display: inline-block; }
-
 /* v0.4: version tag, animated progress, done state */
 .mls-ver { font-size: 11px; font-weight: 700; padding: 1px 7px; margin-left: 6px; border-radius: 999px; background: var(--background-modifier-hover); color: var(--text-muted); vertical-align: middle; }
 .mls-panel.is-running .mls-bar > div {

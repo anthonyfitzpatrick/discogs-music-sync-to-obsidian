@@ -7,6 +7,8 @@ const path = require("node:path");
 
 global.window = { setInterval: () => 0, setTimeout: () => 0 };   // onload's refresh timer; nothing else needs a browser
 const notices = [];
+// What the stand-in for Obsidian's requestUrl answers; a test replaces it to play Discogs.
+let network = async () => ({ status: 500, json: {} });
 const stub = {
   Plugin: class {
     constructor() { this.saved = undefined; }
@@ -18,7 +20,7 @@ const stub = {
   Modal: class { constructor(app) { this.app = app; } },
   Setting: class {},
   Notice: class { constructor(msg) { notices.push(msg); } },
-  requestUrl: async () => ({ status: 500, json: {} }),
+  requestUrl: (req) => network(req),
   setIcon() {},
   moment: () => ({ format: () => "" }),
 };
@@ -175,4 +177,40 @@ test("the dashboard reports the plugins it needs", async () => {
   assert.deepStrictEqual(p.dashboardProblems(), ["Turn on “Enable JavaScript Queries” in Dataview's settings."]);
   app.plugins.plugins.dataview.settings.enableDataviewJs = true;
   assert.deepStrictEqual(p.dashboardProblems(), []);
+});
+
+test("reading Discogs folders reports why it failed instead of returning nothing", async () => {
+  const { p } = await makePlugin(undefined, {});
+  await assert.rejects(p.discogsFolders(), /No Discogs token saved yet/);
+  await p.app.vault.adapter.write("Music/.discogs-token", "t0ken\n");
+  await assert.rejects(p.discogsFolders(), /No Discogs username entered yet/);
+  p.data.username = "someone";
+  for (const [status, why] of [[401, /didn't accept the token/], [404, /no user called “someone”/], [502, /answered 502/]]) {
+    network = async () => ({ status, json: {} });
+    await assert.rejects(p.discogsFolders(), why);
+  }
+  network = async (req) => {
+    assert.match(req.url, /users\/someone\/collection\/folders$/);
+    assert.strictEqual(req.headers.Authorization, "Discogs token=t0ken");
+    return { status: 200, json: { folders: [{ name: "All" }, { name: "Vinyl" }, { name: "Uncategorized" }] } };
+  };
+  assert.deepStrictEqual(await p.discogsFolders(), ["Vinyl", "Uncategorized"]);
+});
+
+test("the dashboard's CSS has no declarations outside a rule", () => {
+  // Leftover declarations with no selector turn into a bogus selector and swallow the next
+  // rule as their body. It happened: the dashboard's table rule was lost that way.
+  const template = require("node:fs").readFileSync(path.join(__dirname, "..", "src", "dashboard-template.md"), "utf8");
+  const sheets = [...template.matchAll(/root\.createEl\("style", \{ text: (?:`([\s\S]*?)`|"((?:[^"\\]|\\.)*)") \}\)/g)]
+    .map((m) => m[1] ?? JSON.parse(`"${m[2]}"`));
+  assert.ok(sheets.length >= 2, "found the dashboard's style sheets");
+  for (const css of sheets) {
+    let depth = 0, selector = "";
+    for (const ch of css.replace(/\/\*[\s\S]*?\*\//g, "")) {
+      if (ch === "{") { if (depth++ === 0) { assert.doesNotMatch(selector, /[;]/, `declarations outside a rule: ${selector.trim().slice(0, 80)}`); selector = ""; } }
+      else if (ch === "}") { assert.ok(depth > 0, "a closing brace with no rule open"); depth--; }
+      else if (depth === 0) selector += ch;
+    }
+    assert.strictEqual(depth, 0, "every rule is closed");
+  }
 });

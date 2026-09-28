@@ -7,9 +7,14 @@
   "author": "Anthony Fitzpatrick",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "test": "npm run build && node --test \"tests/*.test.js\""
+    "lint": "oxlint --deny-warnings && node scripts/lint-dashboard.mjs",
+    "test": "npm run build && node --test \"tests/*.test.js\"",
+    "check": "npm run lint && npm test",
+    "prepare": "git config core.hooksPath hooks"
   },
   "devDependencies": {
-    "esbuild": "^0.28.2"
+    "@oxlint/plugins": "^1.78.0",
+    "esbuild": "^0.28.2",
+    "oxlint": "^1.78.0"
   }
 }

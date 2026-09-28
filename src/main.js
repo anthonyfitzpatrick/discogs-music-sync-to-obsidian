@@ -61,20 +61,6 @@ const tidy = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
 const slug = (s) => tidy(s).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 const splitArtists = (a) => [a, ...String(a).split(/\s+(?:featuring|feat\.?|ft\.?|with|and|&)\s+|\s*[·,\/]\s*/i)].map((x) => x.trim()).filter((x, i, arr) => x && x.toLowerCase() !== "various" && arr.indexOf(x) === i);
 
-function parseFrontmatter(text) {
-  if (!text.startsWith("---")) return null;
-  const end = text.indexOf("\n---", 3);
-  if (end < 0) return null;
-  const out = {}; let key = null;
-  for (const line of text.slice(3, end).split("\n")) {
-    const m = line.match(/^([A-Za-z_][\w-]*):\s*(.*)$/);
-    if (m) { key = m[1]; out[key] = m[2].trim() === "" ? null : val(m[2].trim()); }
-    else if (key && /^\s+-\s+/.test(line)) { if (!Array.isArray(out[key])) out[key] = []; out[key].push(val(line.replace(/^\s+-\s+/, "").trim())); }
-  }
-  return out;
-  function val(v) { if (v === "true" || v === "false") return v === "true"; try { return JSON.parse(v); } catch { return v.replace(/^'|'$/g, ""); } }
-}
-
 /* ------------------------------------------------------------------ engine */
 class Engine {
   // cfg: { username, lyrics, gallery, libraries } — a snapshot of the settings for this run
@@ -252,7 +238,7 @@ class Engine {
       onProgress?.(idx, todo.length);
       const rel = await this.discogs(`releases/${item.id}`);
       let masterYear = "";
-      if (rel.master_id) { try { masterYear = (await this.discogs(`masters/${rel.master_id}`)).year || ""; } catch {} }
+      if (rel.master_id) { try { masterYear = (await this.discogs(`masters/${rel.master_id}`)).year || ""; } catch (e) { this.log(`  original year: ${e.message}`); } }
       // cover
       let cover = "";
       const imgs = rel.images || [];
@@ -722,10 +708,14 @@ class MusicLibrarySync extends Plugin {
   }
   async discogsFolders() {
     if (this.folderCache) return this.folderCache;
-    const t = await this.readToken(".discogs-token"); if (!t || !this.data.username) return [];
+    const t = await this.readToken(".discogs-token");
+    if (!t) throw new Error("No Discogs token saved yet");
+    if (!this.data.username) throw new Error("No Discogs username entered yet");
     const r = await requestUrl({ url: `https://api.discogs.com/users/${encodeURIComponent(this.data.username)}/collection/folders`,
       headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
-    if (r.status >= 400) return [];
+    if (r.status === 401) throw new Error("Discogs didn't accept the token");
+    if (r.status === 404) throw new Error(`Discogs has no user called “${this.data.username}”`);
+    if (r.status >= 400) throw new Error(`Discogs answered ${r.status}`);
     return (this.folderCache = (r.json.folders || []).map((f) => f.name).filter((n) => n !== "All"));
   }
 
@@ -821,7 +811,8 @@ class MusicLibrarySync extends Plugin {
 </div></body></html>`;
       const tmp = path.join(os.tmpdir(), `music-dashboard-export-${Date.now()}.html`);
       fs.writeFileSync(tmp, html, "utf8");
-      try { await this.app.vault.adapter.write(`${MUSIC}/.vinyl-sync/last-export.html`, html); } catch {}   // for troubleshooting
+      try { await this.app.vault.adapter.write(`${MUSIC}/.vinyl-sync/last-export.html`, html); }   // for troubleshooting
+      catch (e) { console.warn("Discogs music sync: couldn't keep a copy of the export page", e); }
       // 3. render off-screen and print
       const win = new remote.BrowserWindow({ show: false, width: layoutW + 40, height: 1400, webPreferences: { offscreen: false } });
       try {
@@ -842,8 +833,9 @@ class MusicLibrarySync extends Plugin {
         await this.app.vault.adapter.writeBinary(out, pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength));
         notice.hide();
         new Notice(`PDF saved: ${out}`, 8000);
-        try { this.app.openWithDefaultApp(out); } catch {}
-      } finally { win.destroy(); try { fs.unlinkSync(tmp); } catch {} }
+        try { this.app.openWithDefaultApp(out); }   // the notice above already gives the path
+        catch (e) { console.warn("Discogs music sync: couldn't open the PDF viewer", e); }
+      } finally { win.destroy(); try { fs.unlinkSync(tmp); } catch { /* a leftover file in the system temp folder is harmless */ } }
     } finally { notice.hide(); }
   }
 
@@ -908,7 +900,6 @@ class MusicLibrarySync extends Plugin {
     const libs = structuredClone(this.data.libraries);
     if (mode === "sync") for (const lib of libs) { try { await this.ensureLibraryFiles(lib); } catch (e) { console.error(e); } }
     Object.assign(s, { running: true, mode, steps: {}, now: "Starting…", log: "", progress: 0, stepList: this.steps() });
-    window.musicLibrarySyncRunning = true;
     this.cancelled = false;
     const started = Date.now();
     const lines = [];
@@ -943,7 +934,6 @@ class MusicLibrarySync extends Plugin {
       this.data.last = { at: Date.now(), mode, ok: !failed && !this.cancelled, summary };
       await this.saveData(this.data);
       Object.assign(s, { running: false, progress: 1, now: "", justDone: true });
-      window.musicLibrarySyncRunning = false;
       this.refresh();
       window.setTimeout(() => { s.justDone = false; this.refresh(); }, 5000);
       new Notice(`Discogs music sync and dashboard: ${summary}`, 7000);
@@ -966,7 +956,7 @@ class LibraryModal extends Modal {
       .addText((t) => { t.setPlaceholder("e.g. Minidiscs").setValue(v.name).onChange((x) => { v.name = x; touched = true; check(); }); window.setTimeout(() => t.inputEl.focus(), 0); });
     const folder = new Setting(c).setName("Discogs folder").setDesc("The folder in your Discogs collection to sync. Leave empty to use the name.")
       .addText((t) => t.setPlaceholder("Same as the name").setValue(v.discogsFolder).onChange((x) => { v.discogsFolder = x; check(); }));
-    plugin.discogsFolders().then((list) => { if (list.length) folder.setDesc(`The folder in your Discogs collection to sync. Leave empty to use the name. Yours: ${list.join(", ")}.`); }).catch(() => {});
+    plugin.discogsFolders().then((list) => { if (list.length) folder.setDesc(`The folder in your Discogs collection to sync. Leave empty to use the name. Yours: ${list.join(", ")}.`); }).catch(() => { /* only a hint: without it the description keeps its general wording */ });
     const iconSet = new Setting(c).setName("Icon").addDropdown((dd) => {
       ICONS.forEach((i) => dd.addOption(i, i));
       dd.setValue(v.icon).onChange((x) => { v.icon = x; showIcon(); });
@@ -1008,10 +998,10 @@ class SetupModal extends Modal {
     const status = c.createEl("p", { cls: "setting-item-description", text: "Reading your Discogs folders…" });
     let folders;
     try { plugin.folderCache = null; folders = await plugin.discogsFolders(); }
-    catch (e) { folders = []; }
+    catch (e) { status.setText(`Couldn't read your Discogs folders: ${e.message}. Check your username and token with Test, then try again.`); return; }
     const used = new Set(plugin.data.libraries.map((l) => l.discogsFolder.toLowerCase()));
     const free = folders.filter((f) => !used.has(f.toLowerCase()));
-    if (!folders.length) { status.setText("Couldn't read your Discogs folders. Check your username and token with Test, then try again."); return; }
+    if (!folders.length) { status.setText("Your Discogs collection has no folders yet."); return; }
     if (!free.length) { status.setText("Every folder in your Discogs collection already has a base."); return; }
     status.setText("Tick the Discogs folders to sync. Each becomes a base with the folder's name, which you can rename afterwards.");
     const pick = new Map(free.map((f) => [f, f !== "Uncategorized"]));
@@ -1182,4 +1172,3 @@ class MusicSettingTab extends PluginSettingTab {
 
 module.exports = MusicLibrarySync;
 module.exports.Engine = Engine;          // exported for testing
-module.exports.parseFrontmatter = parseFrontmatter;
