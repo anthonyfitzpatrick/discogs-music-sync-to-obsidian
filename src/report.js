@@ -37,7 +37,7 @@ function decodeRecord(fm, media, body, fallbackTitle, path = "") {
     max: num(fm.price_max_sek) ?? num(fm.price_high_sek), list: num(fm.market_lowest_sek),
     year: num(fm.original_year) || num(fm.year), added: day(fm.purchased) || day(fm.added_to_discogs),
     genres: list(fm.genres), styles: list(fm.styles), shop: text(fm.shop),
-    ripped: fm.ripped === true, listened: fm.listened === true,
+    listened: fm.listened === true,
     ...tracklist(body),
   };
 }
@@ -181,10 +181,10 @@ function reportParts(records, media, value, theme, interactive) {
   const haveSugg = recs.some((r) => r.mid !== null);
   const highest = (g, isTotal) => (g.some((r) => r.max !== null) ? kr(sum(g, "max")) : isTotal && value.max !== null ? `${kr(value.max)} *` : "—");
   const ovRow = (label, g, isTotal) => [esc(label), int(g.length), int(sum(g, "tracks")), `${Math.round(sum(g, "secs") / 3600)} h`,
-    kr(sum(g, "list")), highest(g, isTotal), `${g.filter((r) => r.ripped).length} / ${g.length}`];
+    kr(sum(g, "list")), highest(g, isTotal)];
   const overview = section("Overview", `${recs.length} records in ${media.length} base${media.length === 1 ? "" : "s"}: ${media.join(", ")}`,
-    card("", table(["Media", "Records", "Tracks", "Playing time", "Lowest listings", "Highest", "Ripped"],
-      [...media.map((m) => ovRow(m, recs.filter((r) => r.media === m))), ovRow("Total", recs, true)], [1, 2, 3, 4, 5, 6], true)));
+    card("", table(["Media", "Records", "Tracks", "Playing time", "Lowest listings", "Highest"],
+      [...media.map((m) => ovRow(m, recs.filter((r) => r.media === m))), ovRow("Total", recs, true)], [1, 2, 3, 4, 5], true)));
 
   // 2. value spread
   const VK = haveSugg ? "mid" : "list";
@@ -241,14 +241,10 @@ function reportParts(records, media, value, theme, interactive) {
 
   // 6. buying
   const months = [...new Set(recs.map((r) => r.added.slice(0, 7)).filter(Boolean))].sort().slice(-18);
-  const shops = count(recs.map((r) => r.shop).filter(Boolean)).slice(0, 10);
   const latest = recs.filter((r) => !r.listened).sort((a, b) => b.added.localeCompare(a.added)).slice(0, 15);
-  const buying = section("Buying", "Purchase date where known, otherwise the date added to Discogs", grid(
-    card("Records added per month", barChart(P, { labels: months, height: 290, xTitle: "Month", yTitle: "Records added",
-      series: media.map((m) => ({ name: m, color: MC[m], values: months.map((mo) => recs.filter((r) => r.media === m && r.added.startsWith(mo)).length) })) })),
-    card("Where you buy", barChart(P, { labels: shops.map((s) => s[0]), horizontal: true, height: 40 + shops.length * 24, xTitle: "Records bought",
-      series: [{ name: "Records", colors: P.distinct(shops.length), values: shops.map((s) => s[1]) }] })),
-  ) + card("Latest additions — not listened to yet", table(["Date", "Album", "Artist", "Media", ...(interactive ? ["Listened"] : [])],
+  const buying = section("Buying", "Purchase date where known, otherwise the date added to Discogs",
+    card("Records added per month", barChart(P, { labels: months, width: 1000, height: 290, xTitle: "Month", yTitle: "Records added",
+      series: media.map((m) => ({ name: m, color: MC[m], values: months.map((mo) => recs.filter((r) => r.media === m && r.added.startsWith(mo)).length) })) })) + card("Latest additions — not listened to yet", table(["Date", "Album", "Artist", "Media", ...(interactive ? ["Listened"] : [])],
     latest.map((r) => [r.added, album(r), esc(r.artist), pill(r.media),
       ...(interactive ? [`<input type="checkbox" class="mls-listen" data-path="${esc(r.path)}" aria-label="Mark ${esc(r.title)} as listened to">`] : [])]))));
 

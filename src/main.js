@@ -7,7 +7,7 @@ const obsidian = require("obsidian");
 const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting } = obsidian;
 
 const MUSIC = "Music";
-const VERSION = "0.11.1";
+const VERSION = "0.11.2";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
@@ -367,7 +367,7 @@ class Engine {
       `format: ${q(fmtS)}`, `media: ${q(fmts[0]?.name || "")}`,
       `cover: ${cover ? q(`[[${cover}]]`) : ""}`,
       `media_condition: ${q(cond["Media Condition"] || "")}`, `sleeve_condition: ${q(cond["Sleeve Condition"] || "")}`,
-      "purchased: ", `shop: ""`, "price_paid_sek: ", "ripped: false",
+      "purchased: ", `shop: ""`, "price_paid_sek: ",
       ...PRICE_KEYS.map((k) => `${k}: ${pr[k]}`),
       `added_to_discogs: ${item.added}`,
       `discogs_id: ${rel.id}`, `discogs_instance: ${item.instance}`, `discogs_url: ${q(rel.uri || "")}`,

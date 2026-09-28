@@ -334,9 +334,8 @@ Write anything you like under **Notes**, or anywhere else in the note. A sync ne
 | Property | Use |
 |---|---|
 | `purchased` | Date you bought it. The dashboard's buying charts use this, falling back to `added_to_discogs`. |
-| `shop` | Where you bought it. Feeds the dashboard's "Where you buy" chart. |
+| `shop` | Where you bought it. Shown in the Library's Catalogue view, and searchable. |
 | `price_paid_sek` | What you paid |
-| `ripped` | Tick once you've digitised it. Feeds the "Ripped" column and the "Not ripped yet" view. |
 | `listened` | Ticked for you when you tick the record on the dashboard's "not listened to yet" list, which also adds `listened_on`. |
 
 ### 8.3 Tracklist
@@ -407,7 +406,6 @@ A table with one row per base and a total, showing:
 - **Playing time**, added up from the track lengths
 - **Lowest listings**: the cheapest copy on Discogs of each record, added up
 - **Highest**: the Mint price suggestions added up; for the total, Discogs' own collection maximum when suggestions are missing (marked \*)
-- **Ripped**: how many are ticked as ripped
 
 ### 10.2 Value spread
 
@@ -434,7 +432,6 @@ Your 15 most-collected artists. Compilations credited to "Various" are left out.
 ### 10.6 Buying
 
 - **Records added per month**: the last 18 months, per base, using `purchased`, or the Discogs date added when `purchased` is empty.
-- **Where you buy**: your top ten shops, from the `shop` property.
 - **Latest additions, not listened to yet**: your 15 newest records you haven't marked as listened to. Tick **Listened** to mark one; its note gets `listened: true` and today's date in `listened_on`, and it leaves the list.
 
 ### 10.7 Colours
@@ -454,9 +451,8 @@ Along the top:
   |---|---|
   | Gallery | Cover cards |
   | By genre | Cover cards, grouped by genre (a record with several genres appears in each) |
-  | Catalogue | A table: artist, album, year, label, catalogue number, country, genres, purchase date, shop, conditions, ripped, lowest listing |
+  | Catalogue | A table: artist, album, year, label, catalogue number, country, genres, purchase date, shop, conditions, lowest listing |
   | Value | A table of every price field, most valuable first |
-  | Not ripped yet | Cover cards of records whose `ripped` isn't ticked |
 
 - **Sort**: the view's own order, or artist, album, year, newest first or most valuable.
 - **Search**: artist, album, label, catalogue number, country, shop, base, genre or style. Every word must match.

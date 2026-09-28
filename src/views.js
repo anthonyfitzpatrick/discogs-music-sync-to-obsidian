@@ -99,6 +99,7 @@ class LibraryPane {
   constructor(view, el) {
     this.view = view; this.plugin = view.plugin; this.el = el;
     const state = this.plugin.data.library;
+    if (!VIEWS[state.view]) state.view = "gallery";       // a view since removed (Not ripped yet)
     const bar = el.createDiv({ cls: "mls-library-bar" });
     const select = (label, options, value, onChange) => {
       const wrap = bar.createEl("label", { cls: "mls-library-field", text: label });

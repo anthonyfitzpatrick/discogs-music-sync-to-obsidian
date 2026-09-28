@@ -20,14 +20,14 @@ const rec = (over) => decodeRecord({ title: "T", artist: "A", price_mid_sek: 100
 
 test("a record is decoded from its frontmatter and tracklist", () => {
   const r = decodeRecord({ title: " ...Ish ", artist: "1927", year: 1990, original_year: 1988, price_low_sek: "73", price_mid_sek: 191,
-    price_high_sek: 249, market_lowest_sek: 40, added_to_discogs: "2026-06-04", genres: "Rock", ripped: true }, "Vinyl", BODY, "fallback");
+    price_high_sek: 249, market_lowest_sek: 40, added_to_discogs: "2026-06-04", genres: "Rock" }, "Vinyl", BODY, "fallback");
   assert.strictEqual(r.title, "...Ish");
   assert.strictEqual(r.year, 1988, "original year wins");
   assert.strictEqual(r.low, 73, "numbers typed as text are decoded");
   assert.strictEqual(r.max, 249, "no Mint price falls back to Near Mint");
   assert.strictEqual(r.added, "2026-06-04", "no purchase date falls back to the Discogs date");
   assert.deepStrictEqual(r.genres, ["Rock"], "a single genre becomes a list");
-  assert.strictEqual(r.ripped, true);
+  assert.strictEqual("ripped" in r, false, "ripped isn't tracked");
   assert.strictEqual(r.listened, false);
   assert.deepStrictEqual(tracklist(BODY), { tracks: 3, secs: 480 }, "headings aren't tracks; blank lengths count as 0");
   assert.strictEqual(decodeRecord({}, "CDs", "", "fallback").title, "fallback");
@@ -47,11 +47,12 @@ test("computed CSS colours become hex", () => {
 });
 
 test("the report has every dashboard section, charts drawn as SVG, and correct totals", () => {
-  const records = [rec({}), rec({ title: "Second", price_mid_sek: 300, ripped: true }), { ...rec({ title: "Third" }), media: "CDs" }];
+  const records = [rec({}), rec({ title: "Second", price_mid_sek: 300 }), { ...rec({ title: "Third" }), media: "CDs" }];
   const html = buildReport(records, ["Vinyl", "CDs"], decodeCollectionValue({ discogs_value_max: 900 }), THEME, "28 September 2026");
   for (const heading of ["Overview", "Value spread", "What's in the collection", "By decade", "Top artists", "Buying"])
     assert.ok(html.includes(`<h2>${heading.replace("'", "&#39;")}</h2>`), heading);
-  assert.strictEqual((html.match(/<svg /g) || []).length, 9, "7 bar charts and 2 doughnuts");
+  assert.strictEqual((html.match(/<svg /g) || []).length, 8, "6 bar charts and 2 doughnuts");
+  assert.doesNotMatch(html, /Where you buy|Ripped/);
   assert.match(html, /<tr class="total"><td>Total<\/td><td class="num">3<\/td><td class="num">9<\/td>/, "3 records, 9 tracks");
   assert.match(html, /Top 20 albums by value \(Medium, VG\+\)/);
   assert.ok(html.includes("#33ff66") && html.includes("#0a0f06") && html.includes("Monaco, monospace"), "theme colours and font");

@@ -21,7 +21,6 @@ const COLUMNS = {
   media: { label: "Base", get: (r) => r.media },
   mediaCondition: { label: "Media", get: (r) => r.mediaCondition },
   sleeveCondition: { label: "Sleeve", get: (r) => r.sleeveCondition },
-  ripped: { label: "Ripped", get: (r) => (r.ripped ? "✓" : "") },
   low: { label: "Low G+", get: (r) => money(r.low), num: true },
   mid: { label: "Mid VG+", get: (r) => money(r.mid), num: true },
   high: { label: "High NM", get: (r) => money(r.high), num: true },
@@ -31,13 +30,12 @@ const COLUMNS = {
   checked: { label: "Checked", get: (r) => r.checked },
 };
 
-// The views: cards with covers, or a table with these columns. A view can filter, group or sort.
+// The views: cards with covers, or a table with these columns. A view can group or sort.
 const VIEWS = {
   gallery: { label: "Gallery", cards: true },
   genre: { label: "By genre", cards: true, group: (r) => (r.genres.length ? r.genres : ["No genre"]) },
-  catalogue: { label: "Catalogue", columns: ["artist", "title", "year", "label", "catno", "country", "genres", "purchased", "shop", "mediaCondition", "sleeveCondition", "ripped", "list"] },
+  catalogue: { label: "Catalogue", columns: ["artist", "title", "year", "label", "catno", "country", "genres", "purchased", "shop", "mediaCondition", "sleeveCondition", "list"] },
   value: { label: "Value", columns: ["artist", "title", "catno", "mediaCondition", "low", "mid", "high", "myCopy", "list", "forSale", "checked"], sort: "value" },
-  unripped: { label: "Not ripped yet", cards: true, filter: (r) => !r.ripped },
 };
 
 // The value used to rank records: the VG+ suggestion where there is one, else the cheapest listing.
@@ -61,7 +59,7 @@ function libraryGroups(records, base, viewKey, search, sortKey) {
   const view = VIEWS[viewKey] || VIEWS.gallery;
   const words = String(search || "").toLowerCase().split(/\s+/).filter(Boolean);
   const sort = SORTS[sortKey] || SORTS[view.sort] || SORTS.artist;
-  const shown = records.filter((r) => (!base || r.media === base) && (!view.filter || view.filter(r)) && matches(r, words)).sort(sort.compare);
+  const shown = records.filter((r) => (!base || r.media === base) && matches(r, words)).sort(sort.compare);
   if (!view.group) return [{ name: "", records: shown }];
   const groups = new Map();
   for (const r of shown) for (const g of view.group(r)) { if (!groups.has(g)) groups.set(g, []); groups.get(g).push(r); }

@@ -13,7 +13,7 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
 - **One Music view, two tabs.** The disc icon opens the plugin's own view, with the sync panel at the top and a Dashboard tab and a Library tab.
 - **Dashboard.** record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and new records you haven't listened to yet, with its own charts. Albums open their notes. Coloured by your active Obsidian theme.
-- **Library.** Browse your records by base: a gallery of covers, by genre, a catalogue table, a value table, or the ones not ripped yet, with search and sorting.
+- **Library.** Browse your records by base: a gallery of covers, by genre, a catalogue table or a value table, with search and sorting.
 - **PDF export.** Saves the dashboard as a PDF in the paper size and orientation you choose.
 - **Sync panel.** Buttons, progress and a log at the top of the dashboard, or in any note through a `music-sync` code block.
 
