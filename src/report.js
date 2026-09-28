@@ -199,7 +199,7 @@ function reportParts(records, media, value, theme, interactive) {
   // 2. value spread
   const VK = haveSugg ? "mid" : "list";
   const top20 = recs.filter((r) => r[VK] !== null).sort((a, b) => b[VK] - a[VK]).slice(0, 20);
-  // A typical record, for each Discogs format in the collection and for all of them together.
+  // A typical album, for each Discogs format in the collection and for all of them together.
   const typical = (g) => {
     const vals = g.map((r) => r[VK]).filter((v) => v !== null).sort((a, b) => a - b);
     const q = (p) => (vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : null);
@@ -220,7 +220,7 @@ function reportParts(records, media, value, theme, interactive) {
       ["Discogs collection value", kr(value.min), kr(value.med), kr(value.max)],
       ...(haveSugg ? [["Sum of per-album estimates", kr(sum(recs, "low")), kr(sum(recs, "mid")), kr(sum(recs, "high"))]] : []),
     ], [1, 2, 3])) +
-    card("A typical record, by format", table(["", ...typicalCols.map(([f]) => f)],
+    card("A typical album, by format", table(["", ...typicalCols.map(([f]) => f)],
       typicalRows.map((label, i) => [esc(label), ...typicalCols.map(([, col]) => col[i])]), typicalCols.map((_, i) => i + 1))) +
     grid(
       card("Records by value (kr)", barChart(P, { labels: bands.map((b) => b[2]), xTitle: valueAxis, yTitle: "Number of records",

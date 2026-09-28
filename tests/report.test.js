@@ -104,16 +104,16 @@ test("a record's format is the first Discogs lists that isn't a wrapper", () => 
   assert.strictEqual(primaryFormat("", ""), "Unknown");
 });
 
-test("a typical record is reported for each format and for all of them", () => {
+test("a typical album is reported for each format and for all of them", () => {
   const vinyl = (mid) => decodeRecord({ title: `V${mid}`, format: "1x Vinyl, LP", media: "Vinyl", price_mid_sek: mid }, "Vinyl", "", "x");
   const cd = (mid) => decodeRecord({ title: `C${mid}`, format: "1x CD, Album", media: "CD", price_mid_sek: mid }, "CDs", "", "x");
   const boxed = decodeRecord({ title: "Box", format: "1x Box Set; 4x Vinyl, LP", media: "Box Set", price_mid_sek: 900 }, "Vinyl", "", "x");
   const html = buildReport([vinyl(100), vinyl(200), vinyl(300), boxed, cd(50)], ["Vinyl", "CDs"], decodeCollectionValue(null), THEME, "now");
-  const card = html.slice(html.indexOf("A typical record, by format"), html.indexOf("Top 20 albums"));
+  const card = html.slice(html.indexOf("A typical album, by format"), html.indexOf("Top 20 albums"));
   assert.match(card, /<th><\/th><th class="num">Vinyl<\/th><th class="num">CD<\/th><th class="num">All<\/th>/, "most common format first, then all");
   assert.match(card, /<td>Records<\/td><td class="num">4<\/td><td class="num">1<\/td><td class="num">5<\/td>/, "the box set counts as vinyl");
   assert.match(card, /<td>Most valuable record<\/td><td class="num">900 kr<\/td><td class="num">50 kr<\/td><td class="num">900 kr<\/td>/);
   assert.doesNotMatch(card, /Box Set/);
   const one = buildReport([vinyl(100)], ["Vinyl"], decodeCollectionValue(null), THEME, "now");
-  assert.match(one.slice(one.indexOf("A typical record")), /<th><\/th><th class="num">Vinyl<\/th><\/tr>/, "one format: one column, named for it");
+  assert.match(one.slice(one.indexOf("A typical album")), /<th><\/th><th class="num">Vinyl<\/th><\/tr>/, "one format: one column, named for it");
 });

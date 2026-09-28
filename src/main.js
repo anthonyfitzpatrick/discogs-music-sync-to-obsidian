@@ -10,7 +10,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const DEFAULT_FOLDER = "Music";
 // A folder path as typed, cleaned: no leading/trailing slashes, single slashes, no empty parts.
 const cleanFolder = (v) => String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
-const VERSION = "0.11.4";
+const VERSION = "0.11.5";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");

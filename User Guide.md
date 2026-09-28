@@ -411,7 +411,7 @@ A table with one row per base and a total, showing:
 ### 10.2 Value spread
 
 - **Whole collection**: Discogs' own low, medium and high value for your collection (fetched with each sync), and the sum of each record's G+, VG+ and NM price suggestions.
-- **A typical record, by format**: for each Discogs format in your collection (Vinyl, CD, Cassette…) and for all of them together: how many records, what the cheapest quarter are worth up to, the median record, where the top quarter starts, the most valuable record, and how much of the value sits in the 20 most valuable. A record's format is the first Discogs lists for it, skipping *Box Set* and *All Media*, which only wrap the discs inside: a box set of LPs counts as Vinyl.
+- **A typical album, by format**: for each Discogs format in your collection (Vinyl, CD, Cassette…) and for all of them together: how many records, what the cheapest quarter are worth up to, the median record, where the top quarter starts, the most valuable record, and how much of the value sits in the 20 most valuable. A record's format is the first Discogs lists for it, skipping *Box Set* and *All Media*, which only wrap the discs inside: a box set of LPs counts as Vinyl.
 - **Records by value**: how many records fall in each price band, per base.
 - **Where the value sits**: the total value in each price band.
 - **Top 20 albums by value**: with the lowest listing, medium (VG+) and highest price for each. Click an album to open its note (Ctrl/Cmd-click for a new tab).
