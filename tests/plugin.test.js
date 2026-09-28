@@ -17,7 +17,7 @@ const stub = {
     registerMarkdownCodeBlockProcessor() {} addRibbonIcon() {} addCommand() {} addSettingTab() {} registerInterval() {} registerView() {} registerEvent() {}
   },
   PluginSettingTab: class { constructor(app) { this.app = app; } },
-  ItemView: class { constructor(leaf) { this.leaf = leaf; } },
+  ItemView: class { constructor(leaf) { this.leaf = leaf; } async setState() {} },
   Modal: class { constructor(app) { this.app = app; } },
   Setting: class {},
   Notice: class { constructor(msg) { notices.push(msg); } },
@@ -28,7 +28,7 @@ const stub = {
 const load = Module._load;
 Module._load = function (req, ...rest) { return req === "obsidian" ? stub : load.call(this, req, ...rest); };
 const Plugin = require(path.join(__dirname, "..", "main.js"));
-const { Engine, vaultFiles } = Plugin;
+const { Engine, vaultFiles, openNote, MusicView } = Plugin;
 
 // An in-memory vault whose paths are case-insensitive, like the default macOS and Windows disks.
 function makeVault(entries = {}) {
@@ -380,4 +380,28 @@ test("with Download all images off, a new record gets only its front cover", asy
       assert.strictEqual(saved.filter((p) => p.includes("/images/")).length, 3);
     }
   }
+});
+
+test("a record opens in reading view, in a new tab with Ctrl or Cmd", () => {
+  const opened = [];
+  const app = { workspace: { openLinkText: (...args) => opened.push(args) } };
+  openNote(app, "Music/Vinyl/A.md", { ctrlKey: false, metaKey: false });
+  openNote(app, "Music/Vinyl/B.md", { ctrlKey: false, metaKey: true });
+  assert.deepStrictEqual(opened, [
+    ["Music/Vinyl/A.md", "", false, { state: { mode: "preview" } }],
+    ["Music/Vinyl/B.md", "", true, { state: { mode: "preview" } }]]);
+});
+
+test("the Music view keeps its scroll position through a redraw, and returns to it on Back", async () => {
+  const view = new MusicView({}, { data: { tab: "library" }, saveData() {} });
+  view.contentEl = { scrollTop: 0 };
+  // a redraw that empties the list, as rebuilding does, knocks the scroll back to the top
+  view.panes = { library: { render: async () => { view.contentEl.scrollTop = 0; } }, dashboard: { render: async () => {} } };
+  view.contentEl.scrollTop = 640;
+  await view.render();
+  assert.strictEqual(view.contentEl.scrollTop, 640, "a redraw keeps the reader's place");
+  assert.deepStrictEqual(view.getState(), { tab: "library", scroll: 640 }, "the place is saved with the tab");
+  view.contentEl.scrollTop = 0;
+  await view.setState({ tab: "library", scroll: 1200 }, {});
+  assert.strictEqual(view.contentEl.scrollTop, 1200, "Back returns to it");
 });

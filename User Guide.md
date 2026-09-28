@@ -432,7 +432,7 @@ A table with one row per base and a total, showing:
 - **A typical album, by format**: for each Discogs format in your collection (Vinyl, CD, Cassette…) and for all of them together: how many records, what the cheapest quarter are worth up to, the median record, where the top quarter starts, the most valuable record, and how much of the value sits in the 20 most valuable. A record's format is the first Discogs lists for it, skipping *Box Set* and *All Media*, which only wrap the discs inside: a box set of LPs counts as Vinyl.
 - **Records by value**: how many records fall in each price band, per base.
 - **Where the value sits**: the total value in each price band.
-- **Top 20 albums by value**: with the lowest listing, medium (VG+) and highest price for each. Click an album to open its note (Ctrl/Cmd-click for a new tab).
+- **Top 20 albums by value**: with the lowest listing, medium (VG+) and highest price for each. Click an album to open its note in reading view (Ctrl/Cmd-click for a new tab).
 
 These use the VG+ price suggestion when available, and the cheapest listing otherwise.
 
@@ -520,7 +520,7 @@ Along the top:
 - **Sort**: the view's own order, or artist, album, year, newest first or most valuable.
 - **Search**: artist, album, label, catalogue number, country, shop, base, genre or style. Every word must match.
 
-The count on the right says how many records are shown. Click a record to open its note (Ctrl/Cmd-click for a new tab). The Library remembers your choices, and redraws by itself when record notes change.
+The count on the right says how many records are shown. Click a record to open its note in reading view (Ctrl/Cmd-click for a new tab). The Library remembers your choices, and redraws by itself when record notes change, keeping your place in the list. After opening a record, **Back** returns you to the same place.
 
 ## 12. Exporting the dashboard as a PDF
 

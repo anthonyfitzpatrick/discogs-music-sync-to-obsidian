@@ -12,8 +12,8 @@ const MUSIC_VIEW = "music-library-sync-music";
 const OLD_VIEWS = { "music-library-sync-dashboard": "dashboard", "music-library-sync-library": "library" };
 const TABS = [["dashboard", "Dashboard", "layout-dashboard"], ["library", "Library", "library"]];
 
-// Opens a record note from a click: a new tab with Ctrl/Cmd, as Obsidian does for links.
-const openNote = (app, path, event) => app.workspace.openLinkText(path, "", event.ctrlKey || event.metaKey);
+// Opens a record note from a click, in reading view: a new tab with Ctrl/Cmd, as Obsidian does for links.
+const openNote = (app, path, event) => app.workspace.openLinkText(path, "", event.ctrlKey || event.metaKey, { state: { mode: "preview" } });
 
 class MusicView extends ItemView {
   constructor(leaf, plugin, type = MUSIC_VIEW) {
@@ -24,10 +24,18 @@ class MusicView extends ItemView {
   getViewType() { return this.type; }
   getDisplayText() { return "Music"; }
   getIcon() { return "disc-3"; }
-  getState() { return { tab: this.tab }; }
+  // The tab and how far down it is scrolled, so Back from a record returns to the same place.
+  getState() { return { tab: this.tab, scroll: this.contentEl?.scrollTop ?? 0 }; }
   async setState(state, result) {
     if (state?.tab && state.tab !== this.tab) await this.show(state.tab);
+    if (Number.isFinite(state?.scroll)) { this.pendingScroll = state.scroll; this.applyScroll(); }
     await super.setState(state, result);
+  }
+  // A scroll position waiting for its tab to be drawn; applied once the content is tall enough.
+  applyScroll() {
+    if (this.pendingScroll === undefined || !this.panes) return;
+    this.contentEl.scrollTop = this.pendingScroll;
+    if (this.contentEl.scrollTop >= this.pendingScroll - 1) this.pendingScroll = undefined;
   }
 
   async onOpen() {
@@ -64,8 +72,15 @@ class MusicView extends ItemView {
     await this.render();
   }
 
-  // Redraws the tab on show; the other redraws when it is next shown.
-  async render() { if (this.panes) await this.panes[this.tab].render(); }
+  // Redraws the tab on show; the other redraws when it is next shown. The scroll position is kept:
+  // a redraw after a note changes must not send the reader back to the top.
+  async render() {
+    if (!this.panes) return;
+    const top = this.contentEl.scrollTop;
+    await this.panes[this.tab].render();
+    this.contentEl.scrollTop = top;
+    this.applyScroll();
+  }
 }
 
 class DashboardPane {
@@ -87,6 +102,8 @@ class DashboardPane {
   async render() {
     const theme = { ...this.plugin.themeForReport(), font: "inherit" };
     const { body, css } = reportParts(await this.plugin.collectRecords(), this.plugin.baseNames(), this.plugin.collectionValue(), theme, true, this.plugin.reportOptions());
+    if (body + css === this.shown) return;          // nothing on the dashboard changed: leave it be
+    this.shown = body + css;
     this.styleEl.setText(css);
     // The report is built as markup with every value escaped (report.js); parsed here into nodes.
     const parsed = new DOMParser().parseFromString(`<div>${body}</div>`, "text/html").body.firstElementChild;
@@ -128,12 +145,16 @@ class LibraryPane {
     const state = this.plugin.data.library, names = this.plugin.baseNames();
     // the base list follows the settings; a removed base falls back to all
     if (state.base && !names.includes(state.base)) state.base = "";
+    const records = await this.plugin.collectRecords();
+    const groups = libraryGroups(records, state.base, state.view, state.search, state.sort);
+    // Rebuilding the list resets scrolling, so it is rebuilt only when something shown has changed.
+    const shown = JSON.stringify([names, state, groups]);
+    if (shown === this.shown) return;
+    this.shown = shown;
     this.baseSelect.empty();
     for (const [k, v] of [["", "All bases"], ...names.map((n) => [n, n])]) this.baseSelect.createEl("option", { value: k, text: v });
     this.baseSelect.value = state.base;
 
-    const records = await this.plugin.collectRecords();
-    const groups = libraryGroups(records, state.base, state.view, state.search, state.sort);
     const total = new Set(groups.flatMap((g) => g.records.map((r) => r.path))).size;
     this.countEl.setText(`${total} record${total === 1 ? "" : "s"}`);
     this.listEl.empty();
@@ -181,4 +202,4 @@ class LibraryPane {
   }
 }
 
-module.exports = { MusicView, MUSIC_VIEW, OLD_VIEWS };
+module.exports = { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote };

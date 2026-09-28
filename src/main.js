@@ -10,7 +10,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const DEFAULT_FOLDER = "Music";
 // A folder path as typed, cleaned: no leading/trailing slashes, single slashes, no empty parts.
 const cleanFolder = (v) => String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
-const VERSION = "0.12.1";
+const VERSION = "0.12.3";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
@@ -19,7 +19,7 @@ const { decodeCollectionPage, decodeIdentity } = require("./discogs.js");
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
 const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, SECTIONS, COLOUR_MODES, FULL_BASES, DEFAULT_ACCENT } = require("./report.js");
 // The plugin's own view — the Dashboard and Library tabs — in place of a dashboard note and .base files.
-const { MusicView, MUSIC_VIEW, OLD_VIEWS } = require("./views.js");
+const { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote } = require("./views.js");
 
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
@@ -1144,3 +1144,5 @@ class MusicSettingTab extends PluginSettingTab {
 module.exports = MusicLibrarySync;
 module.exports.Engine = Engine;          // exported for testing
 module.exports.vaultFiles = vaultFiles;
+module.exports.openNote = openNote;
+module.exports.MusicView = MusicView;          // exported for testing
