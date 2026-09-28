@@ -12,14 +12,14 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 - **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to `Music/Removed from collection`, never deleted.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
 - **Music Dashboard.** Record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and a list of new records you haven't listened to yet. It is coloured by your active Obsidian theme.
-- **PDF export.** Saves the dashboard as a PDF in the paper size and orientation you choose.
+- **PDF export.** Saves the dashboard as a PDF in the paper size and orientation you choose. The plugin builds the report and draws its charts itself, so PDF export needs no other plugin.
 - **Sync panel.** Buttons, progress and a log, in any note, through a `music-sync` code block.
 
 ## Requirements
 
 - Obsidian 1.9 or later (for Bases), desktop only (macOS, Windows or Linux).
 - A Discogs account and a personal access token.
-- For the dashboard: the **Dataview** community plugin (with JavaScript queries enabled) and the **Charts** community plugin.
+- For the live dashboard note only: the **Dataview** community plugin (with JavaScript queries enabled) and the **Charts** community plugin. Syncing and PDF export work without them.
 - Optional: a Genius API access token, for lyrics links.
 
 No Python or other tools are needed. The plugin is plain JavaScript with no build step.

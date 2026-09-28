@@ -55,7 +55,7 @@ The plugin is careful with your notes:
 | The **Charts** community plugin | Draws the dashboard's charts. |
 | A Genius API access token (optional) | Adds lyrics links to tracklists. |
 
-Without Dataview and Charts, syncing still works; only the dashboard is affected. Without a Genius token, notes simply have no lyrics links.
+Without Dataview and Charts, syncing and PDF export still work; only the live dashboard note is affected. Without a Genius token, notes simply have no lyrics links.
 
 ## 3. Installation
 
@@ -385,7 +385,7 @@ The panel takes its colours from your Obsidian theme.
 
 ## 11. The Music Dashboard
 
-`Music/Music Dashboard.md` is a live page. It reads your record notes every time you open it, so it is always up to date. It needs the Dataview and Charts plugins.
+`Music/Music Dashboard.md` is a live page. It reads your record notes every time you open it, so it is always up to date. It needs the Dataview and Charts plugins. (The PDF export in [section 12](#12-exporting-the-dashboard-as-a-pdf) doesn't.)
 
 **Rebuild dashboard** writes the page from the template built into the plugin and fetches your collection's total value from Discogs. Every sync and price refresh also does this. Any edits you make to `Music Dashboard.md` are replaced at the next rebuild, so leave the page as it is. The template's source is `src/dashboard-template.md` in the repository.
 
@@ -438,7 +438,7 @@ The dashboard uses your Obsidian theme's colours. Each base gets its own shade, 
 2. Choose the **Paper size** and **Orientation**.
 3. Press **Export PDF**.
 
-The plugin opens the dashboard if it isn't already open, waits for its charts, and lays it out on the page. Each section is kept on one page where it fits, and every page has a footer with the date and page number. The PDF is saved in `Music/Exports` as, for example, `Music Dashboard 2026-09-28 2105 A4 landscape.pdf`, and opened in your PDF viewer.
+The plugin builds the report itself, straight from your record notes: the same sections and figures as the Music Dashboard, with charts it draws on its own. It doesn't need Dataview or Charts, and the dashboard doesn't have to be open. Charts and tables are kept whole on a page, and every page has a footer with the date and page number. On landscape pages, charts sit two to a row; on portrait pages, one. The PDF is saved in `Music/Exports` as, for example, `Music Dashboard 2026-09-28 2105 A4 landscape.pdf`, and opened in your PDF viewer.
 
 The PDF uses your theme's colours. With a dark theme, pages have a dark background.
 
@@ -532,8 +532,8 @@ It waits up to 20 seconds for Dataview to index your notes after Obsidian starts
 **A new base doesn't appear on the dashboard**
 Reopen the dashboard note. It reads the list of bases when it is drawn.
 
-**"Couldn't find the rendered dashboard" when exporting**
-Open the Music Dashboard, wait for the charts to appear, and export again.
+**"Add a base first — there's nothing to export yet"**
+PDF export reports on your bases. Add one (see [4.4](#44-set-up-your-bases)) and run **Sync from Discogs**.
 
 **Lyrics links are missing**
 Check the Genius token with **Test**, and that **Add Genius lyrics links** is on. Some tracks just aren't on Genius. Links are only added to new records.

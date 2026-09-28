@@ -17,6 +17,8 @@ const DASHBOARD_TEMPLATE = require("./dashboard-template.md");
 const { tidy, slug, baseYaml, allMediaYaml, guessIcon, nameProblem } = require("./bases.js");
 // Decoders for Discogs responses, applied where the responses arrive.
 const { decodeFolderNames, decodeIdentity } = require("./discogs.js");
+// The dashboard as a standalone page for PDF export, built without Dataview or Charts.
+const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport } = require("./report.js");
 
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
@@ -353,7 +355,6 @@ const PAPER = {                         // inches (portrait)
   Letter: [8.5, 11], Legal: [8.5, 14], Tabloid: [11, 17],
 };
 const MARGIN = 0.45;                    // inches
-const LAYOUT_WIDTH = 1000;              // px the dashboard is laid out at, then scaled to the page
 
 class ExportModal extends Modal {
   constructor(app, plugin) { super(app); this.plugin = plugin; }
@@ -541,102 +542,63 @@ class MusicLibrarySync extends Plugin {
     await this.app.workspace.openLinkText(DASHBOARD, "", false);
   }
 
-  async findDashboardRoot() {
-    const find = () => {
-      for (const leaf of this.app.workspace.getLeavesOfType("markdown")) {
-        if (leaf.view?.file?.path !== DASHBOARD) continue;
-        const r = leaf.view.containerEl.querySelector(".md-root");
-        if (r && r.querySelector("canvas")) return r;
-      }
-      return null;
-    };
-    let root = find();
-    if (!root) {
-      await this.app.workspace.openLinkText(DASHBOARD, "", false);
-      for (let i = 0; i < 60 && !(root = find()); i++) await sleep(500);   // wait for Dataview + charts
-      await sleep(1200);                                                     // let chart animations finish
+  // Every record note of every base, decoded for the PDF report. Reads Obsidian's own metadata
+  // cache and the notes themselves, so it needs no other plugin.
+  async collectRecords() {
+    const byTag = new Map(this.data.libraries.map((l) => [l.tag.toLowerCase(), l.name]));
+    const records = [];
+    for (const file of this.app.vault.getMarkdownFiles()) {
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      if (!fm) continue;
+      const media = [].concat(fm.tags ?? []).map((t) => String(t).replace(/^#/, "").toLowerCase()).map((t) => byTag.get(t)).find(Boolean);
+      if (!media) continue;
+      records.push(decodeRecord(fm, media, await this.app.vault.cachedRead(file), file.basename));
     }
-    if (!root) throw new Error("Couldn't find the rendered dashboard — open Music Dashboard and try again");
-    return root;
+    return records;
   }
 
+  // The active theme's colours and font, resolved to values a standalone page can use.
+  themeForReport() {
+    const probe = document.body.createDiv();
+    probe.style.display = "none";
+    const color = (name, fallback) => { probe.style.color = ""; probe.style.color = `var(${name}, ${fallback})`; return cssColorToHex(getComputedStyle(probe).color, fallback); };
+    probe.style.fontFamily = "var(--font-text, sans-serif)";
+    const theme = { fg: color("--text-normal", "#222222"), bg: color("--background-primary", "#ffffff"), muted: color("--text-muted", "#666666"),
+      border: color("--background-modifier-border", "#cccccc"), font: getComputedStyle(probe).fontFamily || "sans-serif" };
+    probe.remove();
+    return theme;
+  }
+
+  // Builds the Music Dashboard as its own page from the notes (report.js) and prints it to PDF with
+  // Obsidian's desktop app. Dataview and Charts are not involved, and the dashboard needn't be open.
   async exportPdf({ size = "A4", orientation = "portrait" } = {}) {
     const electron = require("electron");
     const remote = electron.remote || (() => { try { return require("@electron/remote"); } catch { return null; } })();
     if (!remote?.BrowserWindow) throw new Error("PDF export isn't available in this version of Obsidian. Please report it with “Report a bug” in the plugin's settings.");
+    if (!this.data.libraries.length) throw new Error("Add a base first — there's nothing to export yet");
     const fs = require("fs"), os = require("os"), path = require("path");
     const notice = new Notice("Preparing PDF…", 0);
     try {
-      const root = await this.findDashboardRoot();
-      // 1. clone the dashboard and turn every chart canvas into a crisp image
-      const clone = root.cloneNode(true);
-      const src = root.querySelectorAll("canvas"), dst = clone.querySelectorAll("canvas");
-      src.forEach((c, i) => {
-        const img = document.createElement("img");
-        img.src = c.toDataURL("image/png");
-        img.style.width = "100%"; img.style.height = "auto"; img.style.display = "block";   // keep the chart's proportions
-        dst[i].replaceWith(img);
-      });
-      clone.querySelectorAll("input[type=checkbox]").forEach((cb) => cb.setAttribute("disabled", ""));
-      // 2. carry over Obsidian's own CSS (theme, snippets, plugins) so it looks identical
-      // Obsidian's own @media print rules hide everything except its export container, so drop them
-      const isPrintRule = (r) => r.media && /print/i.test(r.media.mediaText || "");
-      const css = [...document.styleSheets].map((ss) => {
-        try { if (ss.media && /print/i.test(ss.media.mediaText || "")) return "";
-              return [...ss.cssRules].filter((r) => !isPrintRule(r)).map((r) => r.cssText).join("\n"); } catch { return ""; }
-      }).join("\n");
-      const [w, h] = PAPER[size] || PAPER.A4;
-      const pageW = orientation === "landscape" ? h : w;
-      const printable = (pageW - 2 * MARGIN) * 96;
-      const layoutW = Math.round(Math.max(760, Math.min(1400, root.getBoundingClientRect().width || LAYOUT_WIDTH)));  // same width as on screen
-      const scale = Math.max(0.3, Math.min(1, printable / layoutW));
-      // keep a whole section on one page when it fits, so headings never end up alone at the bottom
-      const pageH = orientation === "landscape" ? w : h;
-      const usableLayoutPx = ((pageH - 2 * MARGIN - 0.1) * 96) / scale - 10;
-      const origSections = root.querySelectorAll(".md-section"), cloneSections = clone.querySelectorAll(".md-section");
-      origSections.forEach((sec, i) => { if (sec.getBoundingClientRect().height <= usableLayoutPx) cloneSections[i]?.classList.add("mls-keep"); });
+      let value = decodeCollectionValue(null);
+      try { value = decodeCollectionValue(JSON.parse(await this.app.vault.adapter.read(`${MUSIC}/.vinyl-sync/collection-value.json`))); }
+      catch { /* not fetched yet: the Discogs value columns show "—", as on the dashboard */ }
+      const theme = this.themeForReport();
       const stamp = moment().format("D MMMM YYYY, HH:mm");
-      const html = `<!doctype html><html class="${document.documentElement.className}" style="${document.documentElement.getAttribute("style") || ""}">
-<head><meta charset="utf-8"><title>Music Dashboard</title><style>${css}</style><style>
-  html, body { height: auto !important; min-height: 0 !important; overflow: visible !important; position: static !important; contain: none !important; }
-  .mls-export table.md-table { width: 100% !important; table-layout: auto; }
-  .mls-export table.md-table td:nth-child(2), .mls-export table.md-table td:nth-child(3) { white-space: normal !important; }
-  .mls-export .md-card { overflow: visible !important; }
-  @media print { html, body, body > *, .mls-export, .mls-export * { visibility: visible !important; } body > .mls-export { display: block !important; } }
-  body { margin: 0 !important; background: var(--background-primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .mls-export { width: ${layoutW}px; margin: 0; padding: 0; background: var(--background-primary); color: var(--text-normal); font-family: var(--font-text); }
-  .mls-export-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 18px; padding-bottom: 10px; border-bottom: 3px solid; border-image: linear-gradient(90deg, var(--text-normal), var(--text-muted), var(--background-modifier-border)) 1; }
-  .mls-export-head h1 { margin: 0; font-size: 30px; font-weight: 800; color: var(--text-normal); }
-  .mls-export-head span { color: var(--text-muted); font-size: 13px; }
-  .md-root { gap: 18px !important; }
-  .md-section { break-inside: auto; }
-  .md-section.mls-keep { break-inside: avoid; page-break-inside: avoid; }
-  .md-card, .md-grid, table.md-table tr, .md-chart, img { break-inside: avoid; page-break-inside: avoid; }
-  .md-section h2, .md-card-title { break-after: avoid; page-break-after: avoid; }
-  table.md-table thead, table.md-table tr:first-child { break-after: avoid; }
-  a { color: inherit !important; text-decoration: none !important; }
-  input[type=checkbox] { accent-color: var(--text-normal); }
-</style></head>
-<body class="${document.body.className}" style="${document.body.getAttribute("style") || ""}">
-<div class="mls-export markdown-rendered markdown-preview-view">
-  <div class="mls-export-head"><h1>Music Dashboard</h1><span>Exported ${stamp}</span></div>
-  ${clone.outerHTML}
-</div></body></html>`;
+      const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp);
       const tmp = path.join(os.tmpdir(), `music-dashboard-export-${Date.now()}.html`);
       fs.writeFileSync(tmp, html, "utf8");
       try { await this.app.vault.adapter.write(`${MUSIC}/.vinyl-sync/last-export.html`, html); }   // for troubleshooting
       catch (e) { console.warn("Discogs music sync: couldn't keep a copy of the export page", e); }
-      // 3. render off-screen and print
-      const win = new remote.BrowserWindow({ show: false, width: layoutW + 40, height: 1400, webPreferences: { offscreen: false } });
+      const [w, h] = PAPER[size] || PAPER.A4;
+      const printableW = Math.round(((orientation === "landscape" ? h : w) - 2 * MARGIN) * 96);
+      const win = new remote.BrowserWindow({ show: false, width: printableW, height: 1200, webPreferences: { offscreen: false } });
       try {
         await win.loadFile(tmp);
-        await sleep(800);                                  // fonts & images
-        // the footer is rendered in isolation, without the page's CSS, so the theme colour is resolved here
-        const footColor = getComputedStyle(document.body).getPropertyValue("--text-muted").trim() || "#888";
-        const footer = `<div style="font-size:8px;width:100%;padding:0 ${MARGIN}in;color:${footColor};display:flex;justify-content:space-between;font-family:sans-serif">
+        // the footer is rendered in isolation, without the page's CSS, so it gets the resolved colour
+        const footer = `<div style="font-size:8px;width:100%;padding:0 ${MARGIN}in;color:${theme.muted};display:flex;justify-content:space-between;font-family:sans-serif">
           <span>Music Dashboard · ${stamp}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`;
         const pdf = await win.webContents.printToPDF({
-          pageSize: size, landscape: orientation === "landscape", printBackground: true, scale,
+          pageSize: size, landscape: orientation === "landscape", printBackground: true,
           margins: { top: MARGIN, bottom: MARGIN + 0.1, left: MARGIN, right: MARGIN },
           displayHeaderFooter: true, headerTemplate: "<div></div>", footerTemplate: footer,
         });
@@ -910,7 +872,7 @@ class MusicSettingTab extends PluginSettingTab {
     new Setting(el).setName("Dashboard").setHeading();
     const problems = P.dashboardProblems();
     new Setting(el).setName(problems.length ? "The Music Dashboard needs other plugins" : "Dashboard plugins are ready")
-      .setDesc(problems.length ? problems.join(" ") : "Dataview (with JavaScript queries) and Charts are enabled.")
+      .setDesc(problems.length ? `${problems.join(" ")} Syncing and PDF export work without them.` : "Dataview (with JavaScript queries) and Charts are enabled.")
       .addButton((b) => b.setButtonText("Open dashboard").onClick(() => P.openDashboard()));
 
     new Setting(el).setName("Sync").setHeading();
