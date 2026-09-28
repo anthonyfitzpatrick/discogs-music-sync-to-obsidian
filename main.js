@@ -9,7 +9,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const MUSIC = "Music";
 const DASHBOARD = "Music/Music Dashboard.md";
 const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.8.3";
+const VERSION = "0.8.4";
 const UA = "Wolf359MusicLibrarySync/0.8";
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
@@ -508,7 +508,8 @@ class MusicLibrarySync extends Plugin {
     this.state = { running: false, mode: null, steps: {}, now: "", log: "", progress: 0 };
     this.panels = new Set();
     this.registerMarkdownCodeBlockProcessor("music-sync", (_src, el) => this.renderPanel(el));
-    this.addRibbonIcon("disc-3", "Discogs music sync and dashboard: sync from Discogs", () => this.run("sync"));
+    this.addRibbonIcon("disc-3", "Open Music Dashboard", () => this.openDashboard());
+    this.addCommand({ id: "open-dashboard", name: "Open dashboard", callback: () => this.openDashboard() });
     this.addCommand({ id: "sync", name: "Sync from Discogs", callback: () => this.run("sync") });
     this.addCommand({ id: "prices", name: "Refresh prices", callback: () => this.run("prices") });
     this.addCommand({ id: "dashboard", name: "Rebuild dashboard", callback: () => this.run("dashboard") });
@@ -622,6 +623,15 @@ class MusicLibrarySync extends Plugin {
       headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
     if (r.status >= 400) return [];
     return (this.folderCache = (r.json.folders || []).map((f) => f.name).filter((n) => n !== "All"));
+  }
+
+  // Shows the Music Dashboard: switches to its tab if it's open, builds the note first if it doesn't exist yet.
+  async openDashboard() {
+    const open = this.app.workspace.getLeavesOfType("markdown").find((l) => l.view?.file?.path === DASHBOARD);
+    if (open) { this.app.workspace.revealLeaf(open); return; }
+    if (!this.app.vault.getAbstractFileByPath(DASHBOARD)) await this.run("dashboard");
+    if (!this.app.vault.getAbstractFileByPath(DASHBOARD)) { new Notice("The Music Dashboard couldn't be created — see Sync log"); return; }
+    await this.app.workspace.openLinkText(DASHBOARD, "", false);
   }
 
   async findDashboardRoot() {

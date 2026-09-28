@@ -35,8 +35,8 @@ No Python or other tools are needed. The plugin is plain JavaScript with no buil
 1. Open **Settings → Discogs music sync and dashboard**.
 2. Enter your Discogs username, paste your personal access token and press **Test**.
 3. Check that the three default bases (Vinyl, CDs and Tapes) point at the right Discogs folders, or add your own.
-4. Press the disc icon in the ribbon, or run **Sync from Discogs** from the command palette.
-5. Open `Music/Music Dashboard.md`.
+4. Run **Sync from Discogs** from the command palette.
+5. Press the disc icon in the ribbon to open the Music Dashboard.
 
 The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 

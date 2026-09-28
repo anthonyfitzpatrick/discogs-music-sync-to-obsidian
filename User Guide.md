@@ -109,7 +109,7 @@ If your Discogs folders have different names, edit each base (see [6.3](#63-edit
 
 ### 4.5 Run the first sync
 
-Press the disc icon in the ribbon, or run **Discogs music sync and dashboard: Sync from Discogs** from the command palette.
+Run **Discogs music sync and dashboard: Sync from Discogs** from the command palette. (The disc icon in the ribbon opens the Music Dashboard, which has a **Sync from Discogs** button at the top.)
 
 The first sync can take a while. Discogs allows about one request a second, and each record needs several requests: the release, its master, prices, cover and photos. Expect roughly 5 to 15 seconds per record, plus time for Genius lookups. A collection of 150 records takes about half an hour. Later syncs only fetch new records, so they are quick.
 
@@ -223,7 +223,7 @@ You can't remove the last base.
 
 ## 7. Syncing from Discogs
 
-Start a sync with the ribbon disc icon, the **Sync from Discogs** command, or the **Sync from Discogs** button on the sync panel.
+Start a sync with the **Sync from Discogs** command, or the **Sync from Discogs** button on the sync panel (at the top of the Music Dashboard).
 
 For each base in turn, a sync:
 
@@ -431,6 +431,7 @@ Run these from the command palette (Ctrl/Cmd+P). You can give any of them a hotk
 
 | Command | Does |
 |---|---|
+| Open dashboard | Opens the Music Dashboard, creating it first if needed |
 | Sync from Discogs | Adds new records to every base, then rebuilds the dashboard |
 | Refresh prices | Updates price fields on every record, then rebuilds the dashboard |
 | Rebuild dashboard | Rewrites the Music Dashboard and fetches your collection value |
@@ -438,7 +439,7 @@ Run these from the command palette (Ctrl/Cmd+P). You can give any of them a hotk
 | Export dashboard as PDF… | Opens the PDF export dialog |
 | Add a base… | Opens the Add base dialog |
 
-The ribbon's disc icon runs **Sync from Discogs**.
+The ribbon's disc icon runs **Open dashboard**: it switches to the Music Dashboard if it's already open, and creates the dashboard note first if it doesn't exist yet.
 
 ## 14. Files and folders
 
