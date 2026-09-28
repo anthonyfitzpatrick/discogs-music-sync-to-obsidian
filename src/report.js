@@ -23,6 +23,15 @@ function tracklist(body) {
   return { tracks: rows.length, secs };
 }
 
+// Discogs' wrappers around the media inside them: a box set of LPs is listed "Box Set; 4x Vinyl".
+const CONTAINERS = new Set(["box set", "all media"]);
+// A record's format, as Discogs reports it: the first in its format property ("1x Box Set,
+// Compilation; 4x Vinyl, LP") that isn't a wrapper, else its media property, else "Unknown".
+function primaryFormat(format, media) {
+  const names = text(format).split(";").map((part) => part.trim().replace(/^\d+\s*x\s*/i, "").split(",")[0].trim()).filter(Boolean);
+  return names.find((n) => !CONTAINERS.has(n.toLowerCase())) || text(media) || "Unknown";
+}
+
 // A cover property ("[[123.jpeg]]") as the linked file's name.
 const linkTarget = (v) => text(v).replace(/^\[\[|\]\]$/g, "").split("|")[0];
 
@@ -31,6 +40,7 @@ function decodeRecord(fm, media, body, fallbackTitle, path = "") {
   return {
     path, title: text(fm.title) || fallbackTitle, artist: text(fm.artist), media,
     label: text(fm.label), catno: text(fm.catno), country: text(fm.country), format: text(fm.format), cover: linkTarget(fm.cover),
+    discogsFormat: primaryFormat(fm.format, fm.media),
     mediaCondition: text(fm.media_condition), sleeveCondition: text(fm.sleeve_condition),
     purchased: day(fm.purchased), forSale: num(fm.market_for_sale), myCopy: num(fm.price_my_copy_sek), checked: day(fm.price_checked),
     low: num(fm.price_low_sek), mid: num(fm.price_mid_sek), high: num(fm.price_high_sek),
@@ -188,27 +198,31 @@ function reportParts(records, media, value, theme, interactive) {
 
   // 2. value spread
   const VK = haveSugg ? "mid" : "list";
-  const vals = recs.map((r) => r[VK]).filter((v) => v !== null).sort((a, b) => a - b);
-  const q = (p) => (vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : null);
   const top20 = recs.filter((r) => r[VK] !== null).sort((a, b) => b[VK] - a[VK]).slice(0, 20);
+  // A typical record, for each Discogs format in the collection and for all of them together.
+  const typical = (g) => {
+    const vals = g.map((r) => r[VK]).filter((v) => v !== null).sort((a, b) => a - b);
+    const q = (p) => (vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : null);
+    const top = g.filter((r) => r[VK] !== null).sort((a, b) => b[VK] - a[VK]).slice(0, 20);
+    return [int(g.length), kr(q(0.25)), kr(q(0.5)), kr(q(0.75)), kr(vals.length ? vals[vals.length - 1] : null),
+      sum(g, VK) ? pct(sum(top, VK) / sum(g, VK)) : "—"];
+  };
+  const formats = count(recs.map((r) => r.discogsFormat)).map(([f]) => f);
+  const typicalCols = [...(formats.length > 1 ? formats.map((f) => [f, typical(recs.filter((r) => r.discogsFormat === f))]) : []), [formats.length > 1 ? "All" : formats[0] || "All", typical(recs)]];
+  const typicalRows = ["Records", "Cheapest quarter are worth up to", "Median record", "Top quarter start at", "Most valuable record", "Share of value in the top 20 records"];
   const bands = haveSugg
     ? [[0, 50, "<50"], [50, 100, "50–100"], [100, 200, "100–200"], [200, 400, "200–400"], [400, 700, "400–700"], [700, 1000, "700–1 000"], [1000, 1e9, "1 000+"]]
     : [[0, 25, "<25"], [25, 50, "25–50"], [50, 100, "50–100"], [100, 200, "100–200"], [200, 300, "200–300"], [300, 500, "300–500"], [500, 1e9, "500+"]];
   const inBand = (r, a, b) => r[VK] !== null && r[VK] >= a && r[VK] < b;
   const valueAxis = haveSugg ? "Value per record (kr, Medium VG+)" : "Value per record (kr, cheapest listing)";
   const valueSection = section("Value spread", "How the value of your collection is spread across your records (Discogs data)",
+    card("Whole collection", table(["", "Low", "Medium", "High"], [
+      ["Discogs collection value", kr(value.min), kr(value.med), kr(value.max)],
+      ...(haveSugg ? [["Sum of per-album estimates", kr(sum(recs, "low")), kr(sum(recs, "mid")), kr(sum(recs, "high"))]] : []),
+    ], [1, 2, 3])) +
+    card("A typical record, by format", table(["", ...typicalCols.map(([f]) => f)],
+      typicalRows.map((label, i) => [esc(label), ...typicalCols.map(([, col]) => col[i])]), typicalCols.map((_, i) => i + 1))) +
     grid(
-      card("Whole collection", table(["", "Low", "Medium", "High"], [
-        ["Discogs collection value", kr(value.min), kr(value.med), kr(value.max)],
-        ...(haveSugg ? [["Sum of per-album estimates", kr(sum(recs, "low")), kr(sum(recs, "mid")), kr(sum(recs, "high"))]] : []),
-      ], [1, 2, 3])),
-      card("A typical record", table(["", "Value"], [
-        ["Cheapest quarter of records are worth up to", kr(q(0.25))],
-        ["Median record", kr(q(0.5))],
-        ["Top quarter of records start at", kr(q(0.75))],
-        ["Most valuable record", kr(vals.length ? vals[vals.length - 1] : null)],
-        ["Share of value in your top 20 records", sum(recs, VK) ? pct(sum(top20, VK) / sum(recs, VK)) : "—"],
-      ], [1])),
       card("Records by value (kr)", barChart(P, { labels: bands.map((b) => b[2]), xTitle: valueAxis, yTitle: "Number of records",
         series: media.map((m) => ({ name: m, color: MC[m], values: bands.map(([a, b]) => recs.filter((r) => r.media === m && inBand(r, a, b)).length) })) })),
       card("Where the value sits (kr per value band)", barChart(P, { labels: bands.map((b) => b[2]), xTitle: valueAxis, yTitle: "Total value in band (kr)",
@@ -288,4 +302,4 @@ ${body}</div>
 </body></html>`;
 }
 
-module.exports = { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, esc, kr };
+module.exports = { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, esc, kr };

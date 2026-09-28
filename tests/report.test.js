@@ -1,7 +1,7 @@
 // Tests src/report.js directly: the PDF report is built without Obsidian, Dataview or Charts.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist } = require("../src/report.js");
+const { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist } = require("../src/report.js");
 
 const THEME = { fg: "#33ff66", bg: "#0a0f06", muted: "#4fcc77", border: "#1a5530", font: "Monaco, monospace" };
 const BODY = `# A – B
@@ -94,4 +94,26 @@ test("the report's styles have no declarations outside a rule", () => {
     else if (depth === 0) selector += ch;
   }
   assert.strictEqual(depth, 0);
+});
+
+test("a record's format is the first Discogs lists that isn't a wrapper", () => {
+  assert.strictEqual(primaryFormat("1x Vinyl, LP, Album, Stereo", "Vinyl"), "Vinyl");
+  assert.strictEqual(primaryFormat("1x Box Set, Compilation; 4x Vinyl, LP, Stereo", "Box Set"), "Vinyl", "a box set of LPs is vinyl");
+  assert.strictEqual(primaryFormat("1x All Media, Compilation, Reissue; 1x CD, Album; 1x CD, Album", "All Media"), "CD");
+  assert.strictEqual(primaryFormat("", "Cassette"), "Cassette", "no format property: the media property");
+  assert.strictEqual(primaryFormat("", ""), "Unknown");
+});
+
+test("a typical record is reported for each format and for all of them", () => {
+  const vinyl = (mid) => decodeRecord({ title: `V${mid}`, format: "1x Vinyl, LP", media: "Vinyl", price_mid_sek: mid }, "Vinyl", "", "x");
+  const cd = (mid) => decodeRecord({ title: `C${mid}`, format: "1x CD, Album", media: "CD", price_mid_sek: mid }, "CDs", "", "x");
+  const boxed = decodeRecord({ title: "Box", format: "1x Box Set; 4x Vinyl, LP", media: "Box Set", price_mid_sek: 900 }, "Vinyl", "", "x");
+  const html = buildReport([vinyl(100), vinyl(200), vinyl(300), boxed, cd(50)], ["Vinyl", "CDs"], decodeCollectionValue(null), THEME, "now");
+  const card = html.slice(html.indexOf("A typical record, by format"), html.indexOf("Top 20 albums"));
+  assert.match(card, /<th><\/th><th class="num">Vinyl<\/th><th class="num">CD<\/th><th class="num">All<\/th>/, "most common format first, then all");
+  assert.match(card, /<td>Records<\/td><td class="num">4<\/td><td class="num">1<\/td><td class="num">5<\/td>/, "the box set counts as vinyl");
+  assert.match(card, /<td>Most valuable record<\/td><td class="num">900 kr<\/td><td class="num">50 kr<\/td><td class="num">900 kr<\/td>/);
+  assert.doesNotMatch(card, /Box Set/);
+  const one = buildReport([vinyl(100)], ["Vinyl"], decodeCollectionValue(null), THEME, "now");
+  assert.match(one.slice(one.indexOf("A typical record")), /<th><\/th><th class="num">Vinyl<\/th><\/tr>/, "one format: one column, named for it");
 });

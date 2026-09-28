@@ -7,7 +7,7 @@ const obsidian = require("obsidian");
 const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting } = obsidian;
 
 const MUSIC = "Music";
-const VERSION = "0.11.2";
+const VERSION = "0.11.3";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
