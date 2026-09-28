@@ -7,7 +7,7 @@ const obsidian = require("obsidian");
 const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting } = obsidian;
 
 const MUSIC = "Music";
-const VERSION = "0.11.0";
+const VERSION = "0.11.1";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
@@ -15,8 +15,8 @@ const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require(".
 const { decodeCollectionPage, decodeIdentity } = require("./discogs.js");
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
 const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport } = require("./report.js");
-// The plugin's own views, in place of a dashboard note and .base files.
-const { DashboardView, LibraryView, DASHBOARD_VIEW, LIBRARY_VIEW } = require("./views.js");
+// The plugin's own view — the Dashboard and Library tabs — in place of a dashboard note and .base files.
+const { MusicView, MUSIC_VIEW, OLD_VIEWS } = require("./views.js");
 
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
@@ -31,7 +31,8 @@ const LEGACY_LIBRARIES = [
 ];
 const DEFAULTS = { last: null, username: "", lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" },
   value: null,                                   // Discogs' own value of the collection, fetched with each sync
-  library: { base: "", view: "gallery", sort: "", search: "" },   // the Library view's last choices
+  tab: "dashboard",                              // the Music tab shown last: dashboard or library
+  library: { base: "", view: "gallery", sort: "", search: "" },   // the Library's last choices
   legacyFiles: [] };                             // files earlier versions made, offered for removal in settings
 // Files earlier versions kept in the vault, which the plugin no longer uses. Offered for removal in
 // settings, never removed without asking. (The .base files of each base are added from settings.)
@@ -472,12 +473,11 @@ class MusicLibrarySync extends Plugin {
     this.state = { running: false, mode: null, steps: {}, now: "", log: "", progress: 0 };
     this.panels = new Set();
     this.registerMarkdownCodeBlockProcessor("music-sync", (_src, el) => this.renderPanel(el));
-    this.registerView(DASHBOARD_VIEW, (leaf) => new DashboardView(leaf, this));
-    this.registerView(LIBRARY_VIEW, (leaf) => new LibraryView(leaf, this));
-    this.addRibbonIcon("disc-3", "Open Music Dashboard", () => this.openView(DASHBOARD_VIEW));
-    this.addRibbonIcon("library", "Open Music Library", () => this.openView(LIBRARY_VIEW));
-    this.addCommand({ id: "open-dashboard", name: "Open dashboard", callback: () => this.openView(DASHBOARD_VIEW) });
-    this.addCommand({ id: "open-library", name: "Open library", callback: () => this.openView(LIBRARY_VIEW) });
+    this.registerView(MUSIC_VIEW, (leaf) => new MusicView(leaf, this));
+    for (const type of Object.keys(OLD_VIEWS)) this.registerView(type, (leaf) => new MusicView(leaf, this, type));
+    this.addRibbonIcon("disc-3", "Open Music: Dashboard and Library", () => this.openView());
+    this.addCommand({ id: "open-dashboard", name: "Open dashboard", callback: () => this.openView("dashboard") });
+    this.addCommand({ id: "open-library", name: "Open library", callback: () => this.openView("library") });
     this.addCommand({ id: "sync", name: "Sync from Discogs", callback: () => this.run("sync") });
     this.addCommand({ id: "prices", name: "Refresh prices", callback: () => this.run("prices") });
     this.addCommand({ id: "dashboard", name: "Refresh collection value", callback: () => this.run("dashboard") });
@@ -496,16 +496,18 @@ class MusicLibrarySync extends Plugin {
   }
 
   /* ---- views ---- */
-  async openView(type) {
-    const open = this.app.workspace.getLeavesOfType(type)[0];
-    if (open) { this.app.workspace.revealLeaf(open); return; }
+  // The Music tab, on the given tab ("dashboard" or "library") or the one used last. An open Music tab
+  // is brought forward rather than opening another.
+  musicLeaves() { return [MUSIC_VIEW, ...Object.keys(OLD_VIEWS)].flatMap((t) => this.app.workspace.getLeavesOfType(t)); }
+  async openView(tab) {
+    const open = this.musicLeaves()[0];
+    if (open) { this.app.workspace.revealLeaf(open); if (tab) await open.view?.show?.(tab); return; }
     const leaf = this.app.workspace.getLeaf(true);
-    await leaf.setViewState({ type, active: true });
+    await leaf.setViewState({ type: MUSIC_VIEW, active: true, state: { tab: tab || this.data.tab } });
     this.app.workspace.revealLeaf(leaf);
   }
   redrawViews() {
-    for (const type of [DASHBOARD_VIEW, LIBRARY_VIEW])
-      for (const leaf of this.app.workspace.getLeavesOfType(type)) leaf.view?.render?.().catch?.((e) => console.error(e));
+    for (const leaf of this.musicLeaves()) leaf.view?.render?.().catch?.((e) => console.error(e));
   }
   baseNames() { return this.data.libraries.map((l) => l.name); }
   collectionValue() { return decodeCollectionValue(this.data.value && { discogs_value_min: this.data.value.min, discogs_value_median: this.data.value.med, discogs_value_max: this.data.value.max }); }
@@ -734,7 +736,7 @@ class MusicLibrarySync extends Plugin {
     };
     p.sync = btn("Sync from Discogs", "refresh-cw", "mls-primary", () => this.run("sync"), `Add new ${this.libraryNames()} records from Discogs`);
     p.prices = btn("Refresh prices", "coins", "mls-secondary", () => this.run("prices"), "Update the price fields on every record");
-    p.dash = btn("Library", "library", "mls-secondary", () => this.openView(LIBRARY_VIEW), "Browse your records by base, as a gallery or tables");
+    p.dash = btn("Library", "library", "mls-secondary", () => this.openView("library"), "Browse your records by base, as a gallery or tables");
     p.pdf = btn("Export PDF", "file-down", "mls-secondary", () => new ExportModal(this.app, this).open(), "Save the dashboard as a PDF in the paper size you choose");
     p.cancel = btn("Cancel", "x-circle", "mls-cancel", () => (this.cancelled = true), "Stop after the current record");
     p.steps = p.root.createDiv({ cls: "mls-steps" });

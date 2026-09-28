@@ -125,7 +125,7 @@ Each ticked format becomes a base with the format's name, for example `Vinyl` be
 
 ### 4.5 Run the first sync
 
-Press the disc icon in the ribbon to open the **Music Dashboard**, then press **Sync from Discogs** at the top. You can also run **Discogs music sync and dashboard: Sync from Discogs** from the command palette.
+Press the disc icon in the ribbon to open **Music**, then press **Sync from Discogs** at the top. You can also run **Discogs music sync and dashboard: Sync from Discogs** from the command palette.
 
 The first sync can take a while. Discogs allows about one request a second, and each record needs several requests: the release, its master, prices, cover and photos. Expect roughly 5 to 15 seconds per record, plus time for Genius lookups. A collection of 150 records takes about half an hour. Later syncs only fetch new records, so they are quick.
 
@@ -373,12 +373,19 @@ All prices are in Swedish kronor, rounded to whole kronor.
 
 ## 10. The Music Dashboard
 
-Press the **disc icon** in the ribbon, or run **Open dashboard**. The dashboard opens as its own tab.
+Press the **disc icon** in the ribbon to open **Music**, the plugin's own view. It opens as a tab, and pressing the icon again brings it back rather than opening another.
 
-At the top is the **sync panel**:
+**Music** has the sync panel at the top, and two tabs below it:
+
+- **Dashboard**: your collection's figures and charts (this section),
+- **Library**: your records, as a gallery or tables ([section 11](#11-the-music-library)).
+
+It opens on the tab you used last. **Open dashboard** and **Open library** in the command palette open it on that tab.
+
+The **sync panel** has:
 
 - the plugin's version, and a line with the last run (for example, "✓ Last sync 2 hours ago · already up to date"),
-- buttons: **Sync from Discogs**, **Refresh prices**, **Library**, **Export PDF**, and **Cancel** while something is running,
+- buttons: **Sync from Discogs**, **Refresh prices**, **Library** (switches to the Library tab), **Export PDF**, and **Cancel** while something is running,
 - while running, a step for each base and one for the collection value, marked as active, done or failed, a progress bar and the current action,
 - **Sync log**, which expands to show everything the last run did in this session.
 
@@ -436,7 +443,7 @@ The dashboard uses your Obsidian theme's colours. Each base gets its own shade, 
 
 ## 11. The Music Library
 
-Press the **library icon** in the ribbon, run **Open library**, or press **Library** on the sync panel. The Library opens as its own tab and shows your records.
+Open **Music** with the disc icon and choose the **Library** tab, or run **Open library**, or press **Library** on the sync panel.
 
 Along the top:
 
@@ -472,8 +479,8 @@ Run these from the command palette (Ctrl/Cmd+P). You can give any of them a hotk
 
 | Command | Does |
 |---|---|
-| Open dashboard | Opens the Music Dashboard, or switches to it |
-| Open library | Opens the Music Library, or switches to it |
+| Open dashboard | Opens Music on the Dashboard tab |
+| Open library | Opens Music on the Library tab |
 | Sync from Discogs | Adds new records, places every record in its base, then refreshes the collection value |
 | Refresh prices | Updates price fields on every record, then refreshes the collection value |
 | Refresh collection value | Fetches Discogs' own value of your collection for the dashboard |
@@ -481,7 +488,7 @@ Run these from the command palette (Ctrl/Cmd+P). You can give any of them a hotk
 | Export dashboard as PDF… | Opens the PDF export dialog |
 | Add a base… | Opens the Add base dialog |
 
-The ribbon has two icons: the **disc** opens the Music Dashboard, and the **library** opens the Music Library.
+The ribbon's **disc** icon opens **Music**, on the tab you used last.
 
 ## 14. What the plugin keeps where
 
@@ -498,8 +505,8 @@ The ribbon has two icons: the **disc** opens the Music Dashboard, and the **libr
 
 | What | Where |
 |---|---|
-| The dashboard, the library, their charts and layout | The plugin's code |
-| Settings, bases, the last run, the collection value, the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
+| The Music view, its Dashboard and Library tabs, charts and layout | The plugin's code |
+| Settings, bases, the last run, the collection value, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
 | Discogs and Genius tokens | Obsidian's local storage for this vault on this device |
 
 ## 15. Upgrading from an earlier version

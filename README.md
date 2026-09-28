@@ -11,8 +11,9 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 - **Bases, sorted by format.** Each base takes the records of the formats you choose (Vinyl, CD, Cassette…) from anywhere in your Discogs collection, into its own folder with its own tag. Placement is automatic: you don't need to file records into folders on Discogs, and formats are picked from the ones in your collection, never typed.
 - **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to `Music/Removed from collection`, never deleted.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
-- **Music Dashboard.** A view built into the plugin: record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and new records you haven't listened to yet, with its own charts. Albums open their notes. Coloured by your active Obsidian theme.
-- **Music Library.** A view built into the plugin to browse your records by base: a gallery of covers, by genre, a catalogue table, a value table, or the ones not ripped yet, with search and sorting.
+- **One Music view, two tabs.** The disc icon opens the plugin's own view, with the sync panel at the top and a Dashboard tab and a Library tab.
+- **Dashboard.** record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and new records you haven't listened to yet, with its own charts. Albums open their notes. Coloured by your active Obsidian theme.
+- **Library.** Browse your records by base: a gallery of covers, by genre, a catalogue table, a value table, or the ones not ripped yet, with search and sorting.
 - **PDF export.** Saves the dashboard as a PDF in the paper size and orientation you choose.
 - **Sync panel.** Buttons, progress and a log at the top of the dashboard, or in any note through a `music-sync` code block.
 
@@ -35,8 +36,8 @@ No other plugin is needed.
 1. Open **Settings → Discogs music sync and dashboard**.
 2. Enter your Discogs username, paste your personal access token and press **Test**.
 3. Under **Bases**, press **Set up from Discogs** and tick the formats to sync.
-4. Press the disc icon in the ribbon to open the Music Dashboard, and press **Sync from Discogs**.
-5. Press the library icon to browse your records.
+4. Press the disc icon in the ribbon to open **Music**, and press **Sync from Discogs**.
+5. Switch between the **Dashboard** and **Library** tabs to see your collection.
 
 The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 
