@@ -117,20 +117,15 @@ test("missing files of existing bases are created, and existing files are left a
   for (const t of ["vinyl-library", "cd-library", "tape-library"]) assert.ok(all.includes(`file.hasTag("${t}")`), t);
 });
 
-test("no two bases can share a name, and other clashes are refused", async () => {
-  const { p } = await makePlugin({ last: null }, { "Music/Exports": null });
-  const check = (name, discogsFolder = "", self = null) => p.checkLibrary({ name, discogsFolder }, self);
-  assert.match(await check(""), /Give the base a name/);
-  assert.match(await check("vinyl"), /already a base called “Vinyl”/);
-  assert.match(await check("  VINYL "), /already a base called/);
-  assert.match(await check("Exports"), /already has a folder called/);
-  assert.match(await check("a/b"), /can't start with a dot or contain/);
-  assert.match(await check("!!!"), /at least one letter or number/);
-  assert.match(await check("Minidiscs", "CD"), /already syncs the Discogs folder/);
+test("checking a base adds the vault's own clashes to the naming rules", async () => {
+  // The naming rules themselves are tested directly in bases.test.js.
+  const { p } = await makePlugin({ last: null }, { "Music/Exports": null, "Music/Old.base": "x" });
+  const check = (name, self = null) => p.checkLibrary({ name, discogsFolder: "" }, self);
+  assert.match(await check("vinyl"), /already a base called “Vinyl”/, "the naming rules apply");
+  assert.match(await check("Exports"), /already has a folder called “Exports”/);
+  assert.match(await check("old"), /already has a file called “old\.base”/);
+  assert.strictEqual(await check("Tapes", p.data.libraries[2]), "", "a base doesn't clash with itself or its own files");
   assert.strictEqual(await check("Minidiscs"), "");
-  await p.addLibrary({ name: "Mini Disc" });
-  assert.match(await check("Mini-Disc"), /too close to the existing base/);
-  assert.strictEqual(await check("Tapes", "Cassette", p.data.libraries[2]), "", "a base doesn't clash with itself");
 });
 
 test("renaming a base renames its .base file, including a change of case only", async () => {
