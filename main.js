@@ -9,8 +9,9 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const MUSIC = "Music";
 const DASHBOARD = "Music/Music Dashboard.md";
 const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 const UA = "Wolf359MusicLibrarySync/0.8";
+const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
 // A "base" (library) is one Discogs collection folder synced into its own vault folder, with its
 // own tag, its own .base view and its own place on the dashboard. These are the original three.
@@ -75,7 +76,7 @@ class Engine {
   // cfg: { username, lyrics, gallery, libraries } — a snapshot of the settings for this run
   constructor(adapter, log, isCancelled, cfg) {
     this.fs = adapter; this.log = log; this.isCancelled = isCancelled || (() => false);
-    this.cfg = Object.assign({ username: DEFAULTS.username, lyrics: true, gallery: true, libraries: DEFAULT_LIBRARIES }, cfg);
+    this.cfg = Object.assign({ username: DEFAULTS.username, lyrics: true, gallery: true, libraries: DEFAULT_LIBRARIES, template: "" }, cfg);
     this.last = { discogs: 0, genius: 0 };
     this.noSuggest = false;
   }
@@ -336,9 +337,9 @@ class Engine {
     return n;
   }
 
-  /* ---- dashboard: live Dataview + Charts note built from the template ---- */
+  /* ---- dashboard: live Dataview + Charts note built from the template shipped with the plugin ---- */
   async dashboard(outPath = DASHBOARD) {
-    const tplPath = `${MUSIC}/.vinyl-sync/dashboard-template.md`;
+    const tplPath = this.cfg.template;
     if (!(await this.fs.exists(tplPath))) throw new Error(`Missing ${tplPath}`);
     let v = {};
     try {
@@ -795,7 +796,7 @@ class MusicLibrarySync extends Plugin {
     const lines = [];
     const log = (l) => { lines.push(l); s.log = lines.slice(-400).join("\n"); s.now = l.trim(); this.refresh(); };
     const d = this.data;
-    const eng = new Engine(this.app.vault.adapter, log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs });
+    const eng = new Engine(this.app.vault.adapter, log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs, template: `${this.manifest.dir}/dashboard-template.md` });
     const steps = mode === "dashboard" ? [] : libs;
     const work = steps.length + 1;
     let failed = false, created = 0, priced = 0;
@@ -965,10 +966,11 @@ class MusicSettingTab extends PluginSettingTab {
     text.createDiv({ cls: "mls-about-credit", text: "Wolf 359 Press AB" });
     const links = footer.createDiv("mls-about-links");
     const primary = links.createDiv("mls-about-links-row"), secondary = links.createDiv("mls-about-links-row");
-    // no url yet: shown, but disabled until there's somewhere for reports to go
+    // The issue forms in .github/ISSUE_TEMPLATE apply the bug / enhancement label themselves,
+    // so reports are labelled even when the reporter can't set labels.
     for (const link of [
-      { icon: "bug", label: "Report a bug", primary: true },
-      { icon: "lightbulb", label: "Request a feature", primary: true },
+      { icon: "bug", label: "Report a bug", primary: true, url: `${REPO}/issues/new?template=bug_report.yml&labels=bug` },
+      { icon: "lightbulb", label: "Request a feature", primary: true, url: `${REPO}/issues/new?template=feature_request.yml&labels=enhancement` },
       { icon: "user-round", label: "Anthony Fitzpatrick", primary: true, url: "https://anthonyfitzpatrick.me/" },
       { icon: "globe", label: "wolf359.app", url: "https://wolf359.app/" },
       { icon: "book-open", label: "wolf359.press", url: "https://wolf359.press/" },
@@ -979,8 +981,7 @@ class MusicSettingTab extends PluginSettingTab {
       const ic = b.createSpan({ cls: "mls-about-link-icon", attr: { "aria-hidden": "true" } });
       if (link.icon) setIcon(ic, link.icon); else ic.addClass("mls-about-link-image-icon");
       b.createSpan({ cls: "mls-about-link-text", text: link.label });
-      if (link.url) b.addEventListener("click", () => window.open(link.url, "_blank", "noopener"));
-      else { b.disabled = true; b.setAttr("aria-label", "Coming soon"); }
+      b.addEventListener("click", () => window.open(link.url, "_blank", "noopener"));
     }
   }
 

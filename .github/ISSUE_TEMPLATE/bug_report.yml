@@ -1,0 +1,66 @@
+name: Bug report
+description: Report a reproducible problem with Music Library Sync.
+title: "[Bug report]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please remove any Discogs or Genius tokens and private note content before posting.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Describe the unexpected behaviour and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Give the smallest reliable sequence of steps.
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      options: [Sync from Discogs, Refresh prices, Music Dashboard, PDF export, Settings or bases, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: sync-log
+    attributes:
+      label: Sync log
+      description: Open "Sync log" on the sync panel and paste the relevant lines.
+      render: text
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Music Library Sync version
+      description: Shown at the bottom of the plugin's settings page.
+      placeholder: e.g. 0.8.1
+    validations:
+      required: true
+  - type: input
+    id: obsidian-version
+    attributes:
+      label: Obsidian version
+      placeholder: e.g. 1.13.7
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [macOS, Windows, Linux]
+    validations:
+      required: true
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add screenshots or console errors, with tokens removed.

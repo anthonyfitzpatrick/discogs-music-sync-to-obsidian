@@ -26,11 +26,15 @@ Tokens are saved to `Music/.discogs-token` and `Music/.genius-token`, never to t
 
 - **Sync from Discogs** (ribbon icon or command) adds new records and moves notes for records you've removed from Discogs into `Music/Removed from collection`. It never overwrites an existing note.
 - **Refresh prices** updates only the price fields.
-- **Rebuild dashboard** writes `Music/Music Dashboard.md` from `Music/.vinyl-sync/dashboard-template.md`. The dashboard needs the Dataview and Charts plugins, and takes its colours from the active theme.
+- **Rebuild dashboard** writes `Music/Music Dashboard.md` from the plugin's `dashboard-template.md`. The dashboard needs the Dataview and Charts plugins, and takes its colours from the active theme.
 - **Export dashboard as PDF** saves to `Music/Exports`.
 
 Put a ` ```music-sync``` ` code block in any note to show the sync panel.
 
 ## Install
 
-Copy `main.js`, `manifest.json` and `styles.css` into `<vault>/.obsidian/plugins/music-library-sync/`, then enable **Music Library Sync** in Community plugins. Desktop only.
+Copy `main.js`, `manifest.json`, `styles.css` and `dashboard-template.md` into `<vault>/.obsidian/plugins/music-library-sync/`, then enable **Music Library Sync** in Community plugins. Desktop only.
+
+## Feedback
+
+Use **Report a bug** or **Request a feature** at the bottom of the plugin's settings page. They open this repository's issue forms, which label the issue `bug` or `enhancement` automatically.

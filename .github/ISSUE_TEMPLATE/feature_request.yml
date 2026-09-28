@@ -1,0 +1,33 @@
+name: Feature request
+description: Suggest an improvement to Music Library Sync.
+title: "[Feature request]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for sharing an idea. Please describe the problem it would solve for your music library.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      placeholder: It is difficult to …
+    validations:
+      required: true
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: Describe the experience or behaviour you would like.
+      placeholder: It would be useful if …
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Tell us about workarounds or other approaches you have tried.
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add mockups, examples, or screenshots if useful.
