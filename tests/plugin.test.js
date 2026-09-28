@@ -174,7 +174,8 @@ test("the dashboard is built from the template bundled in main.js", async () => 
   eng.discogs = async () => { throw new Error("offline"); };
   await eng.dashboard();
   const note = text("Music/Music Dashboard.md");
-  assert.match(note, /^# Music Dashboard/);
+  assert.match(note, /^```music-sync\n```\n/, "starts with the sync panel; Obsidian's title shows the note's name, so there's no heading");
+  assert.doesNotMatch(note, /^# /m);
   assert.match(note, /```dataviewjs/);
   assert.match(note, /No bases to show yet/);
 });

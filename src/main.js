@@ -9,7 +9,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const MUSIC = "Music";
 const DASHBOARD = "Music/Music Dashboard.md";
 const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.10.1";
+const VERSION = "0.10.2";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Bundled as text by esbuild (see esbuild.config.mjs), so the dashboard ships inside main.js.
 const DASHBOARD_TEMPLATE = require("./dashboard-template.md");

@@ -1,5 +1,3 @@
-# Music Dashboard
-
 ```music-sync
 ```
 
