@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem with Discogs music sync and Dashboard.
+description: Report a reproducible problem with Discogs music sync and dashboard.
 title: "[Bug report]: "
 labels: [bug]
 body:
@@ -40,7 +40,7 @@ body:
   - type: input
     id: plugin-version
     attributes:
-      label: Discogs music sync and Dashboard version
+      label: Discogs music sync and dashboard version
       description: Shown at the bottom of the plugin's settings page.
       placeholder: e.g. 0.8.1
     validations:

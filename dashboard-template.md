@@ -5,8 +5,8 @@
 
 ```dataviewjs
 // ───────────────────────── Music Dashboard (live: Dataview + Charts) ─────────────────────────
-// Generated from dashboard-template.md in the Discogs music sync and Dashboard plugin — edit the template, not this note.
-// The bases come from the Discogs music sync and Dashboard settings; the original three if the plugin is off.
+// Generated from dashboard-template.md in the Discogs music sync and dashboard plugin — edit the template, not this note.
+// The bases come from the Discogs music sync and dashboard settings; the original three if the plugin is off.
 const LIBS = app.plugins.plugins["music-library-sync"]?.libraries?.() ||
   [{ name: "Vinyl", tag: "vinyl-library" }, { name: "CDs", tag: "cd-library" }, { name: "Tapes", tag: "tape-library" }];
 const TAGS = Object.fromEntries(LIBS.map((l) => [`#${l.tag}`, l.name]));
