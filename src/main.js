@@ -9,27 +9,27 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const MUSIC = "Music";
 const DASHBOARD = "Music/Music Dashboard.md";
 const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.9.0";
+const VERSION = "0.10.0";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Bundled as text by esbuild (see esbuild.config.mjs), so the dashboard ships inside main.js.
 const DASHBOARD_TEMPLATE = require("./dashboard-template.md");
 // Pure logic, testable without Obsidian: names, tags, .base files, icons, naming rules.
-const { tidy, slug, baseYaml, allMediaYaml, guessIcon, nameProblem } = require("./bases.js");
+const { tidy, slug, baseYaml, allMediaYaml, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
 // Decoders for Discogs responses, applied where the responses arrive.
-const { decodeFolderNames, decodeIdentity } = require("./discogs.js");
+const { decodeCollectionPage, decodeIdentity } = require("./discogs.js");
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
 const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport } = require("./report.js");
 
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
-// A "base" (library) is one Discogs collection folder synced into its own vault folder, with its
-// own tag, its own .base view and its own place on the dashboard. A new install starts with none and
-// sets them up from the user's Discogs folders; these three are for installs from before 0.8, whose
-// settings predate the list of bases.
+// A "base" (library) takes the records of one or more Discogs formats into its own vault folder, with
+// its own tag, its own .base view and its own place on the dashboard. A new install starts with none and
+// sets them up from the formats in the user's collection; these three are for installs from before 0.8,
+// whose settings predate the list of bases.
 const LEGACY_LIBRARIES = [
-  { id: "vinyl", name: "Vinyl", discogsFolder: "Vinyl",    dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3",        base: "Music/Vinyl.base" },
-  { id: "cds",   name: "CDs",   discogsFolder: "CD",       dir: "Music/CDs",   tag: "cd-library",    icon: "disc",          base: "Music/CDs.base" },
-  { id: "tapes", name: "Tapes", discogsFolder: "Cassette", dir: "Music/Tapes", tag: "tape-library",  icon: "cassette-tape", base: "Music/Tapes.base" },
+  { id: "vinyl", name: "Vinyl", formats: ["Vinyl"],    dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3",        base: "Music/Vinyl.base" },
+  { id: "cds",   name: "CDs",   formats: ["CD"],       dir: "Music/CDs",   tag: "cd-library",    icon: "disc",          base: "Music/CDs.base" },
+  { id: "tapes", name: "Tapes", formats: ["Cassette"], dir: "Music/Tapes", tag: "tape-library",  icon: "cassette-tape", base: "Music/Tapes.base" },
 ];
 const DEFAULTS = { last: null, username: "", lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" } };
 const ICONS = ["disc-3", "disc", "disc-2", "cassette-tape", "album", "music", "music-2", "radio", "headphones", "library", "guitar", "piano"];
@@ -191,120 +191,164 @@ class Engine {
     return out;
   }
 
-  /* ---- create notes for new collection items in one library's Discogs folder ---- */
-  async sync(T, onProgress) {
-    const folderName = T.discogsFolder, USER = this.cfg.username;
-    this.log(`${T.name}: contacting Discogs…`);
-    const folders = (await this.discogs(`users/${USER}/collection/folders`)).folders;
-    const f = folders.find((x) => x.name === folderName);
-    if (!f) { this.log(`No Discogs folder called "${folderName}" — skipped`); return 0; }
-    const fieldMap = Object.fromEntries(((await this.discogs(`users/${USER}/collection/fields`)).fields || []).map((x) => [x.id, x.name]));
+  /* ---- the whole Discogs collection, every folder, decoded page by page ---- */
+  async collection() {
+    if (this.items) return this.items;
     let items = [], page = 1;
     while (true) {
-      const d = await this.discogs(`users/${USER}/collection/folders/${f.id}/releases?per_page=100&page=${page}`);
-      items = items.concat(d.releases);
-      if (page >= d.pagination.pages) break; page++;
+      const d = decodeCollectionPage(await this.discogs(`users/${this.cfg.username}/collection/folders/0/releases?per_page=100&page=${page}`));
+      items = items.concat(d.items);
+      if (page >= d.pages) break; page++;
     }
-    await this.ensureDir(T.dir); await this.ensureDir(`${T.dir}/covers`);
-    const have = new Set();
-    for (const p of await this.listNotes(T.dir)) {
-      const m = (await this.fs.read(p)).match(/^discogs_instance:\s*(\d+)/m); if (m) have.add(m[1]);
+    return (this.items = items);
+  }
+
+  /* ---- place every record in the base for its format, and bring the notes in line ----
+     onBase(lib, index, done, total) reports progress as each base's new records are added. */
+  async syncAll(onBase) {
+    const libs = this.cfg.libraries;
+    this.log("Reading your Discogs collection…");
+    const items = await this.collection();
+    const fieldMap = Object.fromEntries(((await this.discogs(`users/${this.cfg.username}/collection/fields`)).fields || []).map((x) => [x.id, x.name]));
+
+    // 1. every record goes to the base that takes its format; the rest are reported, never guessed
+    const placed = new Map(libs.map((l) => [l.id, []])), unplaced = new Map();
+    for (const item of items) {
+      const lib = baseFor(item.formats, libs);
+      if (lib) placed.get(lib.id).push(item);
+      else { const k = item.formats.join(" + ") || "no format"; unplaced.set(k, (unplaced.get(k) || 0) + 1); }
     }
-    // records removed from this Discogs folder: move their notes out (never deleted)
-    if (!this.allInstances) {
-      let all = [], pg = 1;
-      while (true) {
-        const d = await this.discogs(`users/${USER}/collection/folders/0/releases?per_page=100&page=${pg}`);
-        all = all.concat(d.releases); if (pg >= d.pagination.pages) break; pg++;
+    for (const l of libs) if (!placed.get(l.id).length) this.log(`⚠ ${l.name}: no record in your collection has the format ${l.formats.join(" or ")}`);
+    for (const [k, n] of unplaced) this.log(`⚠ ${n} record${n === 1 ? "" : "s"} with the format ${k} ${n === 1 ? "has" : "have"} no base — add one in settings to sync ${n === 1 ? "it" : "them"}`);
+    this.unplaced = [...unplaced.values()].reduce((a, n) => a + n, 0);
+
+    // 2. where every existing record note is, across all bases
+    const where = new Map();
+    for (const l of libs) {
+      await this.ensureDir(l.dir); await this.ensureDir(`${l.dir}/covers`);
+      for (const p of await this.listNotes(l.dir)) {
+        const inst = (await this.fs.read(p)).match(/^discogs_instance:\s*(\d+)/m)?.[1];
+        if (inst) where.set(inst, { path: p, lib: l });
       }
-      this.allInstances = new Map(all.map((i) => [String(i.instance_id), i.folder_id]));
     }
-    const inFolder = new Set(items.map((i) => String(i.instance_id)));
-    for (const p of await this.listNotes(T.dir)) {
-      const text = await this.fs.read(p);
-      const inst = text.match(/^discogs_instance:\s*(\d+)/m)?.[1];
-      if (!inst || inFolder.has(inst)) continue;
-      const movedTo = this.cfg.libraries.find((l) => folders.find((x) => x.name === l.discogsFolder)?.id === this.allInstances.get(inst));
-      if (movedTo && movedTo.id !== T.id) { this.log(`  ${p.split("/").pop()} is now in your Discogs ${movedTo.name} folder — left as is`); continue; }
-      const destDir = `${MUSIC}/Removed from collection`; await this.ensureDir(destDir);
-      let dest = `${destDir}/${p.split("/").pop()}`, n = 2;
-      while (await this.fs.exists(dest)) dest = `${destDir}/${p.split("/").pop().replace(/\.md$/, "")} (${n++}).md`;
-      const retag = text.replace(`tags:\n  - ${T.tag}`, "tags:\n  - removed-from-collection")
-        .replace("\ncssclasses:", `\nremoved_from_collection: ${today()}\ncssclasses:`);
-      await this.fs.write(p, retag); await this.fs.rename(p, dest);
+
+    // 3. records no longer in the collection: moved out, never deleted
+    const inCollection = new Set(items.map((i) => i.instance));
+    for (const [inst, note] of where) {
+      if (inCollection.has(inst)) continue;
+      await this.moveNote(note.path, `${MUSIC}/Removed from collection`, note.lib.tag, "removed-from-collection", `removed_from_collection: ${today()}`);
       this.removed = (this.removed || 0) + 1;
-      this.log(`  − ${p.split("/").pop().replace(/\.md$/, "")} is no longer in your Discogs collection → moved to "Removed from collection"`);
+      this.log(`  − ${note.path.split("/").pop().replace(/\.md$/, "")} is no longer in your Discogs collection → moved to "Removed from collection"`);
+      where.delete(inst);
     }
-    const todo = items.filter((i) => !have.has(String(i.instance_id)));
-    this.log(`${T.name}: ${items.length} on Discogs, ${todo.length} new`);
+
+    // 4. notes in the wrong base (the format says otherwise): moved to the right one and retagged
+    for (const l of libs) for (const item of placed.get(l.id)) {
+      const note = where.get(item.instance);
+      if (!note || note.lib.id === l.id) continue;
+      await this.moveNote(note.path, l.dir, note.lib.tag, l.tag, "");
+      this.moved = (this.moved || 0) + 1;
+      this.log(`  → ${note.path.split("/").pop().replace(/\.md$/, "")} is ${item.formats.join(" + ")} → moved from ${note.lib.name} to ${l.name}`);
+    }
+
+    // 5. new records
     let made = 0;
-    for (const [idx, item] of todo.entries()) {
-      if (this.isCancelled()) break;
-      onProgress?.(idx, todo.length);
-      const rel = await this.discogs(`releases/${item.id}`);
-      let masterYear = "";
-      if (rel.master_id) { try { masterYear = (await this.discogs(`masters/${rel.master_id}`)).year || ""; } catch (e) { this.log(`  original year: ${e.message}`); } }
-      // cover
-      let cover = "";
-      const imgs = rel.images || [];
-      const img = imgs.find((x) => x.type === "primary") || imgs[0];
-      if (img?.uri) {
-        const ext = (img.uri.split("?")[0].match(/\.(jpe?g|png|gif|webp)$/i)?.[0] || ".jpg").toLowerCase();
-        cover = `${rel.id}${ext}`;
-        const dest = `${T.dir}/covers/${cover}`;
-        if (!(await this.fs.exists(dest))) {
-          try { await this.fs.writeBinary(dest, await this.discogs(img.uri, true)); }
-          catch (e) { this.log(`  cover failed: ${e.message}`); cover = ""; }
-        }
+    for (const [i, l] of libs.entries()) {
+      const todo = placed.get(l.id).filter((item) => !where.has(item.instance));
+      this.log(`${l.name}: ${placed.get(l.id).length} in your collection, ${todo.length} new`);
+      for (const [idx, item] of todo.entries()) {
+        if (this.isCancelled()) break;
+        onBase?.(l, i, idx, todo.length);
+        await this.createNote(l, item, fieldMap);
+        made++;
       }
-      // every other image Discogs has (back, labels, inner sleeves…)
-      const gallery = [];
-      if (this.cfg.gallery) await this.ensureDir(`${T.dir}/images`);
-      for (const [n, im] of this.cfg.gallery ? imgs.entries() : []) {
-        if (!im.uri || this.isCancelled()) continue;
-        const ext = (im.uri.split("?")[0].match(/\.(jpe?g|png|gif|webp)$/i)?.[0] || ".jpg").toLowerCase();
-        const fn = `${rel.id}-${String(n + 1).padStart(2, "0")}${ext}`, dest = `${T.dir}/images/${fn}`;
-        if (!(await this.fs.exists(dest))) {
-          try { await this.fs.writeBinary(dest, await this.discogs(im.uri, true)); } catch (e) { this.log(`  image failed: ${e.message}`); continue; }
-        }
-        gallery.push(fn);
-      }
-      const cond = Object.fromEntries((item.notes || []).map((n) => [fieldMap[n.field_id] || n.field_id, n.value]));
-      const pr = await this.prices(rel.id, cond["Media Condition"] || "");
-      const artist = artistsStr(rel.artists);
-      const lab = (rel.labels || [{}])[0];
-      const fmts = rel.formats || [];
-      const fmtS = fmts.map((x) => `${x.qty || "1"}x ${x.name}` + (x.descriptions?.length ? ", " + x.descriptions.join(", ") : "")).join("; ");
-      const fm = [
-        "---",
-        `artist: ${q(artist)}`, `title: ${q(rel.title)}`, `year: ${rel.year || ""}`, `original_year: ${masterYear || rel.year || ""}`,
-        "genres:", ...(rel.genres || []).map((g) => `  - ${q(g)}`),
-        "styles:", ...(rel.styles || []).map((g) => `  - ${q(g)}`),
-        `label: ${q(cleanName(lab.name))}`, `catno: ${q(lab.catno)}`, `country: ${q(rel.country)}`,
-        `format: ${q(fmtS)}`, `media: ${q(fmts[0]?.name || "")}`,
-        `cover: ${cover ? q(`[[${cover}]]`) : ""}`,
-        `media_condition: ${q(cond["Media Condition"] || "")}`, `sleeve_condition: ${q(cond["Sleeve Condition"] || "")}`,
-        "purchased: ", `shop: ""`, "price_paid_sek: ", "ripped: false",
-        ...PRICE_KEYS.map((k) => `${k}: ${pr[k]}`),
-        `added_to_discogs: ${(item.date_added || "").slice(0, 10)}`,
-        `discogs_id: ${rel.id}`, `discogs_instance: ${item.instance_id}`, `discogs_url: ${q(rel.uri || "")}`,
-        "cssclasses:", "  - vinyl-record",
-        "tags:", `  - ${T.tag}`,
-        "---",
-      ];
-      const body = [`# ${artist} – ${rel.title}`, ""];
-      if (cover) body.push(`![[${cover}|300]]`, "");
-      body.push("## Tracklist", "", "<!-- tracklist v2 --><!-- g2 -->", await this.tracklist(rel), "",
-        "## Images", "", gallery.length ? gallery.map((g) => `![[${g}|180]]`).join(" ") : this.cfg.gallery ? "_No images on Discogs._" : "_Images not downloaded (turned off in settings)._", "", "## Notes");
-      if ((cond.Notes || "").trim()) body.push("", cond.Notes);
-      const base = safe(`${artist} - ${rel.title}`).slice(0, 150);
-      let p = `${T.dir}/${base}.md`, n = 2;
-      while (await this.fs.exists(p)) p = `${T.dir}/${base} (${n++}).md`;
-      await this.fs.write(p, fm.join("\n") + "\n" + body.join("\n") + "\n");
-      made++; this.log(`  + ${artist} – ${rel.title}`);
+      onBase?.(l, i, todo.length, todo.length);
     }
-    onProgress?.(todo.length, todo.length);
     return made;
+  }
+
+  // Moves a note to another folder, swapping one tag for another, and optionally adding a property.
+  // The note's own text is kept; nothing is deleted.
+  async moveNote(path, destDir, fromTag, toTag, addLine) {
+    await this.ensureDir(destDir);
+    const name = path.split("/").pop();
+    let dest = `${destDir}/${name}`, n = 2;
+    while (await this.fs.exists(dest)) dest = `${destDir}/${name.replace(/\.md$/, "")} (${n++}).md`;
+    let text = await this.fs.read(path);
+    const end = text.indexOf("\n---", 3);
+    let fm = text.slice(0, end); const rest = text.slice(end);
+    const tagLine = new RegExp(`^(\\s*-\\s*)#?${fromTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "m");
+    if (tagLine.test(fm)) fm = fm.replace(tagLine, `$1${toTag}`);
+    else this.log(`  (couldn't find the tag ${fromTag} in ${name}; set its tag to ${toTag} yourself)`);
+    if (addLine) fm = fm.replace("\ncssclasses:", `\n${addLine}\ncssclasses:`);
+    text = fm + rest;
+    await this.fs.write(path, text);
+    await this.fs.rename(path, dest);
+  }
+
+  /* ---- one new record note ---- */
+  async createNote(T, item, fieldMap) {
+    const rel = await this.discogs(`releases/${item.id}`);
+    let masterYear = "";
+    if (rel.master_id) { try { masterYear = (await this.discogs(`masters/${rel.master_id}`)).year || ""; } catch (e) { this.log(`  original year: ${e.message}`); } }
+    // cover
+    let cover = "";
+    const imgs = rel.images || [];
+    const img = imgs.find((x) => x.type === "primary") || imgs[0];
+    if (img?.uri) {
+      const ext = (img.uri.split("?")[0].match(/\.(jpe?g|png|gif|webp)$/i)?.[0] || ".jpg").toLowerCase();
+      cover = `${rel.id}${ext}`;
+      const dest = `${T.dir}/covers/${cover}`;
+      if (!(await this.fs.exists(dest))) {
+        try { await this.fs.writeBinary(dest, await this.discogs(img.uri, true)); }
+        catch (e) { this.log(`  cover failed: ${e.message}`); cover = ""; }
+      }
+    }
+    // every other image Discogs has (back, labels, inner sleeves…)
+    const gallery = [];
+    if (this.cfg.gallery) await this.ensureDir(`${T.dir}/images`);
+    for (const [n, im] of this.cfg.gallery ? imgs.entries() : []) {
+      if (!im.uri || this.isCancelled()) continue;
+      const ext = (im.uri.split("?")[0].match(/\.(jpe?g|png|gif|webp)$/i)?.[0] || ".jpg").toLowerCase();
+      const fn = `${rel.id}-${String(n + 1).padStart(2, "0")}${ext}`, dest = `${T.dir}/images/${fn}`;
+      if (!(await this.fs.exists(dest))) {
+        try { await this.fs.writeBinary(dest, await this.discogs(im.uri, true)); } catch (e) { this.log(`  image failed: ${e.message}`); continue; }
+      }
+      gallery.push(fn);
+    }
+    const cond = Object.fromEntries(item.notes.map((n) => [fieldMap[n.field_id] || n.field_id, n.value]));
+    const pr = await this.prices(rel.id, cond["Media Condition"] || "");
+    const artist = artistsStr(rel.artists);
+    const lab = (rel.labels || [{}])[0];
+    const fmts = rel.formats || [];
+    const fmtS = fmts.map((x) => `${x.qty || "1"}x ${x.name}` + (x.descriptions?.length ? ", " + x.descriptions.join(", ") : "")).join("; ");
+    const fm = [
+      "---",
+      `artist: ${q(artist)}`, `title: ${q(rel.title)}`, `year: ${rel.year || ""}`, `original_year: ${masterYear || rel.year || ""}`,
+      "genres:", ...(rel.genres || []).map((g) => `  - ${q(g)}`),
+      "styles:", ...(rel.styles || []).map((g) => `  - ${q(g)}`),
+      `label: ${q(cleanName(lab.name))}`, `catno: ${q(lab.catno)}`, `country: ${q(rel.country)}`,
+      `format: ${q(fmtS)}`, `media: ${q(fmts[0]?.name || "")}`,
+      `cover: ${cover ? q(`[[${cover}]]`) : ""}`,
+      `media_condition: ${q(cond["Media Condition"] || "")}`, `sleeve_condition: ${q(cond["Sleeve Condition"] || "")}`,
+      "purchased: ", `shop: ""`, "price_paid_sek: ", "ripped: false",
+      ...PRICE_KEYS.map((k) => `${k}: ${pr[k]}`),
+      `added_to_discogs: ${item.added}`,
+      `discogs_id: ${rel.id}`, `discogs_instance: ${item.instance}`, `discogs_url: ${q(rel.uri || "")}`,
+      "cssclasses:", "  - vinyl-record",
+      "tags:", `  - ${T.tag}`,
+      "---",
+    ];
+    const body = [`# ${artist} – ${rel.title}`, ""];
+    if (cover) body.push(`![[${cover}|300]]`, "");
+    body.push("## Tracklist", "", "<!-- tracklist v2 --><!-- g2 -->", await this.tracklist(rel), "",
+      "## Images", "", gallery.length ? gallery.map((g) => `![[${g}|180]]`).join(" ") : this.cfg.gallery ? "_No images on Discogs._" : "_Images not downloaded (turned off in settings)._", "", "## Notes");
+    if ((cond.Notes || "").trim()) body.push("", cond.Notes);
+    const base = safe(`${artist} - ${rel.title}`).slice(0, 150);
+    let p = `${T.dir}/${base}.md`, n = 2;
+    while (await this.fs.exists(p)) p = `${T.dir}/${base} (${n++}).md`;
+    await this.fs.write(p, fm.join("\n") + "\n" + body.join("\n") + "\n");
+    this.log(`  + ${artist} – ${rel.title}`);
   }
 
   /* ---- refresh price fields only ---- */
@@ -390,6 +434,9 @@ class MusicLibrarySync extends Plugin {
     this.data = Object.assign(structuredClone(DEFAULTS), saved);
     if (!Array.isArray(this.data.libraries)) this.data.libraries = saved ? structuredClone(LEGACY_LIBRARIES) : [];
     if (saved && saved.username === undefined) this.data.username = "discogs-user";   // pre-0.8 settings were the author's own
+    // Before 0.10 a base synced a Discogs folder. The folders were named after their formats (Vinyl,
+    // CD, Cassette), which are Discogs' own spellings, so each becomes the format its base takes.
+    for (const lib of this.data.libraries) if (!Array.isArray(lib.formats)) { lib.formats = [lib.discogsFolder || lib.name]; delete lib.discogsFolder; }
     this.state = { running: false, mode: null, steps: {}, now: "", log: "", progress: 0 };
     this.panels = new Set();
     this.registerMarkdownCodeBlockProcessor("music-sync", (_src, el) => this.renderPanel(el));
@@ -417,7 +464,7 @@ class MusicLibrarySync extends Plugin {
   }
   async save() { await this.saveData(this.data); this.refresh(); }
 
-  // Why a proposed name (and Discogs folder) can't be used, or "" when it can. `self` is the library
+  // Why a proposed name (and its formats) can't be used, or "" when it can. `self` is the library
   // being edited, so it doesn't clash with itself. No two bases may share a name, ignoring case and spacing.
   async checkLibrary(v, self = null) {
     const problem = nameProblem(v, this.data.libraries.filter((l) => l !== self), !!self);
@@ -434,14 +481,15 @@ class MusicLibrarySync extends Plugin {
     const err = await this.checkLibrary(v); if (err) throw new Error(err);
     const name = tidy(v.name), s = slug(name);
     let id = s, n = 2; while (this.data.libraries.some((l) => l.id === id)) id = `${s}-${n++}`;
-    const lib = { id, name, discogsFolder: tidy(v.discogsFolder) || name, dir: `${MUSIC}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3", base: `${MUSIC}/${name}.base` };
+    const lib = { id, name, formats: [...v.formats], dir: `${MUSIC}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3", base: `${MUSIC}/${name}.base` };
     await this.ensureLibraryFiles(lib);
     this.data.libraries.push(lib);
     await this.save();
     return lib;
   }
 
-  // Renames the base (and its .base file) and updates its Discogs folder and icon. Notes don't move.
+  // Renames the base (and its .base file) and updates its formats and icon. Notes aren't moved here;
+  // the next sync moves any record whose format now belongs to another base.
   async updateLibrary(lib, v) {
     const err = await this.checkLibrary(v, lib); if (err) throw new Error(err);
     const name = tidy(v.name);
@@ -454,7 +502,7 @@ class MusicLibrarySync extends Plugin {
       }
       lib.base = to; lib.name = name;
     }
-    lib.discogsFolder = tidy(v.discogsFolder) || name;
+    lib.formats = [...v.formats];
     lib.icon = v.icon || lib.icon;
     await this.save();
   }
@@ -475,12 +523,12 @@ class MusicLibrarySync extends Plugin {
     });
   }
 
-  // Adds a base for each chosen Discogs folder, named after the folder. Returns what was added and
+  // Adds a base for each chosen format, named after the format. Returns what was added and
   // what was skipped, with the reason.
-  async addFromDiscogs(folders) {
+  async addFromDiscogs(formats) {
     const added = [], skipped = [];
-    for (const f of folders) {
-      const v = { name: f, discogsFolder: f, icon: guessIcon(f) };
+    for (const f of formats) {
+      const v = { name: f, formats: [f], icon: guessIcon(f) };
       const err = await this.checkLibrary(v);
       if (err) { skipped.push(`${f}: ${err}`); continue; }
       added.push(await this.addLibrary(v));
@@ -508,7 +556,7 @@ class MusicLibrarySync extends Plugin {
     const p = `${MUSIC}/${file}`, fs = this.app.vault.adapter;
     return (await fs.exists(p)) ? (await fs.read(p)).trim() : "";
   }
-  async writeToken(file, value) { await this.app.vault.adapter.write(`${MUSIC}/${file}`, value.trim() + "\n"); this.folderCache = null; }
+  async writeToken(file, value) { await this.app.vault.adapter.write(`${MUSIC}/${file}`, value.trim() + "\n"); this.formatCache = null; }
   async discogsIdentity() {
     const t = await this.readToken(".discogs-token"); if (!t) throw new Error("No Discogs token saved yet");
     const r = await requestUrl({ url: "https://api.discogs.com/oauth/identity", headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
@@ -520,17 +568,26 @@ class MusicLibrarySync extends Plugin {
     const r = await requestUrl({ url: "https://api.genius.com/search?q=test", headers: { Authorization: `Bearer ${t}` }, throw: false });
     if (r.status >= 400) throw new Error(r.status === 401 ? "Genius didn't accept the token" : `Genius answered ${r.status}`);
   }
-  async discogsFolders() {
-    if (this.folderCache) return this.folderCache;
+  // The formats in the user's Discogs collection, with how many records include each — read from
+  // Discogs, so a base's formats are always chosen from real names and never typed.
+  async collectionFormats() {
+    if (this.formatCache) return this.formatCache;
     const t = await this.readToken(".discogs-token");
     if (!t) throw new Error("No Discogs token saved yet");
     if (!this.data.username) throw new Error("No Discogs username entered yet");
-    const r = await requestUrl({ url: `https://api.discogs.com/users/${encodeURIComponent(this.data.username)}/collection/folders`,
-      headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
-    if (r.status === 401) throw new Error("Discogs didn't accept the token");
-    if (r.status === 404) throw new Error(`Discogs has no user called “${this.data.username}”`);
-    if (r.status >= 400) throw new Error(`Discogs answered ${r.status}`);
-    return (this.folderCache = decodeFolderNames(r.json).filter((n) => n !== "All"));
+    let items = [], page = 1;
+    while (true) {
+      if (page > 1) await sleep(1100);                                   // Discogs' rate limit
+      const r = await requestUrl({ url: `https://api.discogs.com/users/${encodeURIComponent(this.data.username)}/collection/folders/0/releases?per_page=100&page=${page}`,
+        headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
+      if (r.status === 401) throw new Error("Discogs didn't accept the token");
+      if (r.status === 404) throw new Error(`Discogs has no user called “${this.data.username}”`);
+      if (r.status >= 400) throw new Error(`Discogs answered ${r.status}`);
+      const d = decodeCollectionPage(r.json);
+      items = items.concat(d.items);
+      if (page >= d.pages) break; page++;
+    }
+    return (this.formatCache = formatCounts(items));
   }
 
   // Shows the Music Dashboard: switches to its tab if it's open, builds the note first if it doesn't exist yet.
@@ -687,13 +744,21 @@ class MusicLibrarySync extends Plugin {
     this.refresh();
     try {
       await eng.init();
-      for (let i = 0; i < steps.length && !this.cancelled; i++) {
+      if (mode === "sync") {
+        try {
+          created = await eng.syncAll((lib, i, done, total) => {
+            libs.slice(0, i).forEach((l) => { s.steps[l.id] = "done"; });
+            s.steps[lib.id] = done >= total ? "done" : "active";
+            s.progress = (i + (total ? done / total : 1)) / work; this.refresh();
+          });
+        } catch (e) { failed = true; for (const l of libs) if (s.steps[l.id] !== "done") s.steps[l.id] = "error"; log(`ERROR: ${e.message}`); console.error(e); }
+      }
+      for (let i = 0; mode === "prices" && i < steps.length && !this.cancelled; i++) {
         const st = steps[i];
         s.steps[st.id] = "active"; s.progress = i / work; this.refresh();
         const prog = (done, total) => { s.progress = (i + (total ? done / total : 1)) / work; this.refresh(); };
         try {
-          if (mode === "sync") created += await eng.sync(st, prog);
-          else priced += await eng.refreshPrices(st, prog);
+          priced += await eng.refreshPrices(st, prog);
           s.steps[st.id] = "done";
         } catch (e) { failed = true; s.steps[st.id] = "error"; log(`ERROR (${st.name}): ${e.message}`); console.error(e); }
       }
@@ -704,7 +769,8 @@ class MusicLibrarySync extends Plugin {
     finally {
       const shown = Date.now() - started; if (shown < 1500) await new Promise((r) => setTimeout(r, 1500 - shown));
       const summary = this.cancelled ? `cancelled after ${created} new` : failed ? "finished with errors — open Sync log" :
-        mode === "sync" ? ([created ? `${created} new record${created === 1 ? "" : "s"} added` : "", eng.removed ? `${eng.removed} removed` : ""].filter(Boolean).join(", ") || "already up to date") :
+        mode === "sync" ? ([created ? `${created} new record${created === 1 ? "" : "s"} added` : "", eng.moved ? `${eng.moved} moved to the right base` : "",
+          eng.removed ? `${eng.removed} removed` : "", eng.unplaced ? `${eng.unplaced} with no base for their format — see Sync log` : ""].filter(Boolean).join(", ") || "already up to date") :
         mode === "prices" ? `prices updated on ${priced} records` : "dashboard rebuilt";
       this.data.last = { at: Date.now(), mode, ok: !failed && !this.cancelled, summary };
       await this.saveData(this.data);
@@ -722,16 +788,37 @@ class LibraryModal extends Modal {
   constructor(app, plugin, lib, done) { super(app); this.plugin = plugin; this.lib = lib; this.done = done; }
   onOpen() {
     const { plugin, lib } = this, c = this.contentEl;
-    const v = { name: lib?.name || "", discogsFolder: lib?.discogsFolder || "", icon: lib?.icon || "disc-3" };
+    const v = { name: lib?.name || "", formats: [...(lib?.formats || [])], icon: lib?.icon || "disc-3" };
     this.titleEl.setText(lib ? `Edit “${lib.name}”` : "Add a base");
     if (!lib) c.createEl("p", { cls: "setting-item-description",
-      text: "A base is one folder in your Discogs collection, synced into its own folder in Music with its own .base view, its own tag and its own place on the dashboard." });
+      text: "A base takes every record of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music with its own .base view, its own tag and its own place on the dashboard." });
     new Setting(c).setName("Name")
       .setDesc(lib ? `Also renames ${lib.base.split("/").pop()}. The notes stay in ${lib.dir}.` : "Used for the folder and the .base file. No two bases can have the same name.")
       .addText((t) => { t.setPlaceholder("e.g. Minidiscs").setValue(v.name).onChange((x) => { v.name = x; touched = true; check(); }); window.setTimeout(() => t.inputEl.focus(), 0); });
-    const folder = new Setting(c).setName("Discogs folder").setDesc("The folder in your Discogs collection to sync. Leave empty to use the name.")
-      .addText((t) => t.setPlaceholder("Same as the name").setValue(v.discogsFolder).onChange((x) => { v.discogsFolder = x; check(); }));
-    plugin.discogsFolders().then((list) => { if (list.length) folder.setDesc(`The folder in your Discogs collection to sync. Leave empty to use the name. Yours: ${list.join(", ")}.`); }).catch(() => { /* only a hint: without it the description keeps its general wording */ });
+
+    // Formats are picked from what Discogs reports for the collection, never typed, so a
+    // misspelling can't quietly send records nowhere.
+    new Setting(c).setName("Formats").setHeading();
+    const formatsEl = c.createDiv();
+    const status = formatsEl.createEl("p", { cls: "setting-item-description", text: "Reading the formats in your Discogs collection…" });
+    const others = plugin.data.libraries.filter((l) => l !== lib);
+    const toggleFor = (name, detail) => {
+      const taken = others.find((l) => l.formats.some((g) => g.toLowerCase() === name.toLowerCase()));
+      new Setting(formatsEl).setName(name).setDesc(taken ? `${detail} Taken by “${taken.name}”.` : detail)
+        .addToggle((t) => t.setValue(v.formats.includes(name)).setDisabled(!!taken).onChange((on) => {
+          v.formats = on ? [...v.formats, name] : v.formats.filter((f) => f !== name); touched = true; check();
+        }));
+    };
+    plugin.collectionFormats().then((found) => {
+      status.setText("Turn on the formats this base takes. A record goes to the base of its first format that has one.");
+      const names = new Set(found.map((f) => f.name));
+      for (const f of found) toggleFor(f.name, `${f.count} record${f.count === 1 ? "" : "s"} in your collection.`);
+      for (const f of v.formats) if (!names.has(f)) toggleFor(f, "No record in your collection has this format now.");
+    }).catch((e) => {
+      status.setText(`Couldn't read your Discogs collection: ${e.message}. Formats can only be chosen from your collection; check your username and token with Test, then open this again.`);
+      for (const f of v.formats) toggleFor(f, "");
+    });
+
     const iconSet = new Setting(c).setName("Icon").addDropdown((dd) => {
       ICONS.forEach((i) => dd.addOption(i, i));
       dd.setValue(v.icon).onChange((x) => { v.icon = x; showIcon(); });
@@ -747,14 +834,14 @@ class LibraryModal extends Modal {
       .addButton((b) => { save = b; b.setButtonText(lib ? "Save" : "Add base").setCta().onClick(async () => {
         b.setDisabled(true);
         try {
-          if (lib) { await plugin.updateLibrary(lib, v); new Notice(`Saved “${lib.name}”`); }
+          if (lib) { await plugin.updateLibrary(lib, v); new Notice(`Saved “${lib.name}”. The next sync moves records to match.`, 8000); }
           else { const n = await plugin.addLibrary(v); new Notice(`Added the base “${n.name}” — the next sync fills it from Discogs`, 8000); }
           this.close(); this.done?.();
         } catch (e) { err.setText(e.message); b.setDisabled(false); }
       }); });
     const check = async () => {
       const n = ++seq, e = await plugin.checkLibrary(v, lib);
-      if (n !== seq) return;                                    // a newer keystroke is already being checked
+      if (n !== seq) return;                                    // a newer change is already being checked
       err.setText(touched ? e : ""); save.setDisabled(!!e);
       if (preview) { const name = tidy(v.name); preview.setText(name && !e ? `Creates ${MUSIC}/${name}/, ${MUSIC}/${name}.base and the tag #${slug(name)}-library.` : ""); }
     };
@@ -763,32 +850,32 @@ class LibraryModal extends Modal {
   onClose() { this.contentEl.empty(); }
 }
 
-// First-run setup: lists the folders in the user's Discogs collection and adds a base for each one
-// they tick, named after the folder.
+// First-run setup: lists the formats in the user's Discogs collection, with how many records have
+// each, and adds a base for each one they tick, named after the format.
 class SetupModal extends Modal {
   constructor(app, plugin, done) { super(app); this.plugin = plugin; this.done = done; }
   async onOpen() {
     const { plugin } = this, c = this.contentEl;
     this.titleEl.setText("Set up bases from Discogs");
-    const status = c.createEl("p", { cls: "setting-item-description", text: "Reading your Discogs folders…" });
-    let folders;
-    try { plugin.folderCache = null; folders = await plugin.discogsFolders(); }
-    catch (e) { status.setText(`Couldn't read your Discogs folders: ${e.message}. Check your username and token with Test, then try again.`); return; }
-    const used = new Set(plugin.data.libraries.map((l) => l.discogsFolder.toLowerCase()));
-    const free = folders.filter((f) => !used.has(f.toLowerCase()));
-    if (!folders.length) { status.setText("Your Discogs collection has no folders yet."); return; }
-    if (!free.length) { status.setText("Every folder in your Discogs collection already has a base."); return; }
-    status.setText("Tick the Discogs folders to sync. Each becomes a base with the folder's name, which you can rename afterwards.");
-    const pick = new Map(free.map((f) => [f, f !== "Uncategorized"]));
-    for (const f of free) new Setting(c).setName(f)
-      .setDesc(f === "Uncategorized" ? "Records you haven't put in a folder." : `Creates ${MUSIC}/${f}/ and ${MUSIC}/${f}.base`)
-      .addToggle((t) => t.setValue(pick.get(f)).onChange((x) => pick.set(f, x)));
+    const status = c.createEl("p", { cls: "setting-item-description", text: "Reading the formats in your Discogs collection…" });
+    let found;
+    try { plugin.formatCache = null; found = await plugin.collectionFormats(); }
+    catch (e) { status.setText(`Couldn't read your Discogs collection: ${e.message}. Check your username and token with Test, then try again.`); return; }
+    const taken = (name) => plugin.data.libraries.some((l) => l.formats.some((g) => g.toLowerCase() === name.toLowerCase()));
+    const free = found.filter((f) => !taken(f.name));
+    if (!found.length) { status.setText("Your Discogs collection has no records yet."); return; }
+    if (!free.length) { status.setText("Every format in your Discogs collection already has a base."); return; }
+    status.setText("Tick the formats to sync. Each becomes a base with the format's name, which you can rename afterwards. A record with several formats (a box set, say) goes to the base of its first format that has one.");
+    const pick = new Map(free.map((f) => [f.name, true]));
+    for (const f of free) new Setting(c).setName(f.name)
+      .setDesc(`${f.count} record${f.count === 1 ? "" : "s"}. Creates ${MUSIC}/${f.name}/ and ${MUSIC}/${f.name}.base`)
+      .addToggle((t) => t.setValue(true).onChange((x) => pick.set(f.name, x)));
     const out = c.createDiv({ cls: "mls-form-error" });
     new Setting(c)
       .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()))
       .addButton((b) => b.setButtonText("Add bases").setCta().onClick(async () => {
-        const chosen = free.filter((f) => pick.get(f));
-        if (!chosen.length) { out.setText("Tick at least one folder."); return; }
+        const chosen = free.map((f) => f.name).filter((n) => pick.get(n));
+        if (!chosen.length) { out.setText("Tick at least one format."); return; }
         b.setDisabled(true);
         const { added, skipped } = await plugin.addFromDiscogs(chosen);
         if (skipped.length) { out.setText(`Not added — ${skipped.join(" ")}`); b.setDisabled(false); }
@@ -828,14 +915,14 @@ class MusicSettingTab extends PluginSettingTab {
       g.createEl("strong", { text: "Getting started" });
       const ol = g.createEl("ol");
       [["Enter your Discogs username and paste a personal access token below, then press Test.", d.username && saved.discogs],
-       ["Under Bases, press “Set up from Discogs” to choose which Discogs folders to sync.", d.libraries.length > 0],
+       ["Under Bases, press “Set up from Discogs” and tick the formats to sync, such as Vinyl and CD.", d.libraries.length > 0],
        ["Run “Sync from Discogs” from the command palette, then press the disc icon in the ribbon to open the Music Dashboard.", false]]
         .forEach(([t, done]) => ol.createEl("li", { text: t, cls: done ? "is-done" : "" }));
     }
 
     new Setting(el).setName("Discogs").setHeading();
     new Setting(el).setName("Username").setDesc("The Discogs account whose collection is synced.")
-      .addText((t) => t.setPlaceholder("your-discogs-name").setValue(d.username || "").onChange(async (x) => { d.username = x.trim(); P.folderCache = null; await P.save(); }));
+      .addText((t) => t.setPlaceholder("your-discogs-name").setValue(d.username || "").onChange(async (x) => { d.username = x.trim(); P.formatCache = null; await P.save(); }));
     this.token(el, saved.discogs, "Personal access token", ".discogs-token",
       "Required. Create one at discogs.com → Settings → Developers.", "Discogs", async () => {
         const who = await P.discogsIdentity();
@@ -851,11 +938,11 @@ class MusicSettingTab extends PluginSettingTab {
 
     new Setting(el).setName("Bases").setHeading();
     el.createEl("p", { cls: "setting-item-description",
-      text: "Each base syncs one Discogs folder into its own folder in Music, with its own .base view and a place on the dashboard. Names must be unique." });
+      text: "Each base takes the records of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music, with its own .base view and a place on the dashboard. Names must be unique." });
     if (!d.libraries.length) el.createEl("p", { cls: "setting-item-description", text: "No bases yet." });
     for (const lib of d.libraries) {
       const row = new Setting(el).setName(lib.name)
-        .setDesc(`Discogs folder “${lib.discogsFolder}” → ${lib.dir} · #${lib.tag}`)
+        .setDesc(`Takes ${lib.formats.join(", ")} records → ${lib.dir} · #${lib.tag}`)
         .addExtraButton((b) => b.setIcon("pencil").setTooltip("Rename or edit").onClick(() => new LibraryModal(this.app, P, lib, redraw).open()))
         .addExtraButton((b) => b.setIcon("trash-2").setTooltip("Stop syncing this base")
           .onClick(() => new ConfirmModal(this.app, `Stop syncing “${lib.name}”?`,
@@ -865,7 +952,7 @@ class MusicSettingTab extends PluginSettingTab {
     }
     new Setting(el)
       .addButton((b) => b.setButtonText("Set up from Discogs").setDisabled(!d.username || !saved.discogs)
-        .setTooltip(d.username && saved.discogs ? "Choose Discogs folders to add as bases" : "Enter your username and token first")
+        .setTooltip(d.username && saved.discogs ? "Choose formats from your collection to add as bases" : "Enter your username and token first")
         .onClick(() => new SetupModal(this.app, P, redraw).open()))
       .addButton((b) => b.setButtonText("Add base").setCta().onClick(() => new LibraryModal(this.app, P, null, redraw).open()));
 

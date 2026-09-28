@@ -172,12 +172,12 @@ views:
         direction: DESC
 `;
 
-// A sensible icon for a base named after a Discogs folder.
+// A sensible icon for a base named after a Discogs format.
 const guessIcon = (name) => {
   const n = name.toLowerCase();
   if (/cass|tape/.test(n)) return "cassette-tape";
   if (/vinyl|lp|record|7"|12"|45|78/.test(n)) return "disc-3";
-  if (/\bcds?\b|compact|sacd|minidisc|\bmd\b/.test(n)) return "disc";
+  if (/\bcd(s|r)?\b|compact|sacd|minidisc|\bmd\b/.test(n)) return "disc";
   if (/dvd|blu|video/.test(n)) return "disc-2";
   return "music";
 };
@@ -195,10 +195,32 @@ function nameProblem(v, others, editing) {
   if (same) return `There's already a base called “${same.name}”. Pick a different name.`;
   const close = others.find((l) => slug(l.name) === s || (!editing && l.tag === `${s}-library`));
   if (close) return `“${name}” is too close to the existing base “${close.name}”. Pick a different name.`;
-  const folder = tidy(v.discogsFolder) || name;
-  const dup = others.find((l) => l.discogsFolder.toLowerCase() === folder.toLowerCase());
-  if (dup) return `The base “${dup.name}” already syncs the Discogs folder “${dup.discogsFolder}”.`;
+  if (!v.formats?.length) return "Choose at least one format for the base.";
+  for (const f of v.formats) {
+    const taken = others.find((l) => l.formats.some((g) => sameFormat(g, f)));
+    if (taken) return `The base “${taken.name}” already takes ${f} records.`;
+  }
   return "";
 }
 
-module.exports = { tidy, slug, baseYaml, allMediaYaml, guessIcon, nameProblem };
+// Format names are compared as Discogs spells them, ignoring only capitals and spacing.
+const sameFormat = (a, b) => tidy(a).toLowerCase() === tidy(b).toLowerCase();
+
+// The base for a record: the first of its formats, in Discogs' order, that a base takes. A box set
+// listed as ["Box Set", "Vinyl"] goes to the Vinyl base unless a base takes Box Set. null if none.
+function baseFor(formats, libs) {
+  for (const f of formats) {
+    const lib = libs.find((l) => l.formats.some((g) => sameFormat(g, f)));
+    if (lib) return lib;
+  }
+  return null;
+}
+
+// How many records include each format, most common first: what Set up and the base dialog offer.
+function formatCounts(items) {
+  const counts = new Map();
+  for (const item of items) for (const f of new Set(item.formats)) counts.set(f, (counts.get(f) || 0) + 1);
+  return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+}
+
+module.exports = { tidy, slug, baseYaml, allMediaYaml, guessIcon, nameProblem, baseFor, formatCounts };

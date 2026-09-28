@@ -105,13 +105,13 @@ The token gives read access to your account. Treat it like a password.
 
 ### 4.4 Set up your bases
 
-In Discogs, your collection can be split into folders, such as Vinyl, CD and Cassette. The plugin syncs each Discogs folder you choose into its own base.
+Every record on Discogs has a format, such as Vinyl, CD or Cassette. The plugin puts each record in the base for its format, automatically: you don't have to sort your collection into folders on Discogs.
 
 1. Under **Bases**, press **Set up from Discogs**. The button works once your username and token are saved.
-2. The dialog lists the folders in your Discogs collection. Every folder is ticked except **Uncategorized** (records you haven't put in a folder). Untick any you don't want.
+2. The dialog reads your collection and lists every format in it, with how many records have each. All are ticked; untick any you don't want.
 3. Press **Add bases**.
 
-Each ticked folder becomes a base with the folder's name, for example a `Vinyl` folder becomes `Music/Vinyl/`, `Music/Vinyl.base` and the tag `#vinyl-library`, with an icon to match. You can rename bases afterwards (see [6.3](#63-editing-and-renaming-a-base)), or add more with **Add base** (see [6.2](#62-adding-a-base)).
+Each ticked format becomes a base with the format's name, for example `Vinyl` becomes `Music/Vinyl/`, `Music/Vinyl.base` and the tag `#vinyl-library`, with an icon to match. You can rename bases afterwards (see [6.3](#63-editing-and-renaming-a-base)), or add more with **Add base** (see [6.2](#62-adding-a-base)).
 
 ### 4.5 Check the dashboard plugins
 
@@ -146,11 +146,11 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 
 ### 5.3 Bases
 
-Lists every base with its icon, name, Discogs folder, vault folder and tag.
+Lists every base with its icon, name, formats, vault folder and tag.
 
 - The **pencil** button edits or renames the base.
 - The **bin** button stops syncing it.
-- **Set up from Discogs** adds bases for Discogs folders that don't have one yet.
+- **Set up from Discogs** adds bases for formats in your collection that don't have one yet.
 - **Add base** creates a new one by hand.
 
 See [section 6](#6-bases).
@@ -178,13 +178,21 @@ The bottom of the page shows the plugin's version, and buttons to report a bug, 
 
 ### 6.1 What a base is
 
-A base is one Discogs collection folder, synced into:
+A base takes every record of the formats you choose, from anywhere in your Discogs collection, into:
 
 - its own **vault folder** inside `Music/`, which holds its record notes, a `covers/` folder and an `images/` folder,
 - its own **tag**, such as `#vinyl-library`, which every record note in it carries,
 - its own **`.base` file**, such as `Music/Vinyl.base`, an Obsidian Bases view with the views listed below,
 - its own entry in **`Music/All Media.base`**, which shows every base together,
 - its own colour and rows on the **Music Dashboard**.
+
+### How records find their base
+
+- Each base takes one or more **formats**, as Discogs names them: for example Vinyl takes `Vinyl`, and CDs might take `CD` and `CDr`.
+- Formats are **chosen from the formats in your collection, never typed**, so a misspelling can't send records nowhere.
+- Each format belongs to **one base only**.
+- A record with several formats goes to the base of the **first** of them that has one, in the order Discogs lists them. A box set listed as *Box Set, Vinyl* goes to your Vinyl base, unless you have a base for Box Set.
+- A record whose formats have **no base** isn't synced, and every sync says so in the log and the summary, so nothing is left out without you knowing.
 
 Every `.base` file has these views:
 
@@ -198,11 +206,11 @@ Every `.base` file has these views:
 
 ### 6.2 Adding a base
 
-Say you've started collecting MiniDiscs and made a **MiniDisc** folder in your Discogs collection.
+Say you've started collecting MiniDiscs and added some to your Discogs collection.
 
 1. Open **Settings → Discogs music sync and dashboard** and press **Add base**, or run **Discogs music sync and dashboard: Add a base…**.
 2. Enter a **Name**, for example `MiniDiscs`. This becomes the folder name, the `.base` file name and the name on the dashboard.
-3. Enter the **Discogs folder** to sync, for example `MiniDisc`. Leave it empty if the Discogs folder has the same name. The description lists your Discogs folders.
+3. Under **Formats**, turn on the formats the base takes, for example `Minidisc`. The dialog lists every format in your collection with its record count; formats another base already takes are shown as taken and can't be turned on. If your collection can't be read, formats can't be chosen: check your username and token with **Test**.
 4. Choose an **Icon**. It is shown in the settings list and in the sync progress.
 5. The dialog shows what it will create, for example: *Creates Music/MiniDiscs/, Music/MiniDiscs.base and the tag #minidiscs-library.*
 6. Press **Add base**.
@@ -216,7 +224,7 @@ If a base's folder or `.base` file goes missing later, the next sync creates it 
 Press the pencil next to a base. You can change:
 
 - **Name**: renames the base on the dashboard and renames its `.base` file. Links to the `.base` file are updated. The notes stay where they are, and the tag doesn't change.
-- **Discogs folder**: which Discogs folder the base syncs from.
+- **Formats**: which formats the base takes. When you change them, the next sync moves any record whose format now belongs to a different base.
 - **Icon**.
 
 ### 6.4 Name rules
@@ -225,7 +233,7 @@ Each base must have its own name. The **Add base** and **Save** buttons stay dis
 
 - **another base already has that name.** Capitals and extra spaces don't count, so `vinyl`, `VINYL` and `  Vinyl ` are all the same as `Vinyl`.
 - **the name is too close to another base's.** Names that differ only in punctuation or spacing, such as `Mini Disc` and `Mini-Disc`, would produce the same tag.
-- **another base already syncs that Discogs folder.** Each Discogs folder can feed only one base.
+- **no format is chosen**, or **a chosen format already belongs to another base**. Each format can belong to only one base.
 - **`Music/` already has a file or folder with that name**, such as `Exports`, `Removed from collection` or `All Media`.
 - **the name contains a character that isn't allowed in file names** (`\ / : * ? " < > | # ^ [ ]`), or starts with a dot.
 - the name is empty, has no letters or numbers, or is longer than 60 characters.
@@ -242,14 +250,17 @@ You can remove every base. The dashboard then says there are no bases to show, a
 
 Start a sync with the **Sync from Discogs** command, or the **Sync from Discogs** button on the sync panel (at the top of the Music Dashboard).
 
-For each base in turn, a sync:
+A sync:
 
-1. reads the base's Discogs folder, all pages of it,
-2. works out which records have no note yet, matching on each note's `discogs_instance`,
-3. moves notes for records that have left the folder (see [7.2](#72-records-you-remove-from-discogs)),
-4. creates a note for each new record (see [section 8](#8-record-notes)).
+1. reads your whole Discogs collection, every folder and every page,
+2. puts each record in the base for its format (see [6.1](#61-what-a-base-is)), and reports records whose format has no base, and bases whose formats no record has,
+3. finds every existing record note, in every base, matching on each note's `discogs_instance`,
+4. moves notes of records that have left your collection (see [7.2](#72-records-you-remove-from-discogs)),
+5. moves notes that are in the wrong base, for example after you change a base's formats (see [7.3](#73-records-in-the-wrong-base)),
+6. creates a note for each new record, base by base (see [section 8](#8-record-notes)),
+7. rebuilds the Music Dashboard.
 
-When all bases are done, it rebuilds the Music Dashboard.
+The summary at the end says how many records were added, moved and removed, and how many have no base.
 
 ### 7.1 Records you add
 
@@ -259,18 +270,21 @@ The same album can be in your collection more than once; each copy gets its own 
 
 ### 7.2 Records you remove from Discogs
 
-If a record is no longer in a base's Discogs folder:
+If a record is no longer anywhere in your Discogs collection, its note is moved to `Music/Removed from collection`. Its tag is changed to `#removed-from-collection` and a `removed_from_collection` date is added, so it drops out of the bases and the dashboard but keeps everything you wrote in it.
 
-- **If you moved it to another folder that another base syncs**, its note is left where it is, and the log says so. Move the note to the other base's folder yourself, and change its tag to match, if you want it counted there.
-- **If it has left your collection**, its note is moved to `Music/Removed from collection`. Its tag is changed to `#removed-from-collection` and a `removed_from_collection` date is added, so it drops out of the bases and the dashboard but keeps everything you wrote in it.
+Moving a record between folders on Discogs changes nothing: folders don't decide where records go.
 
 Nothing is ever deleted.
 
-### 7.3 Cancelling
+### 7.3 Records in the wrong base
+
+If a record's note is in one base but its format belongs to another (because you changed a base's formats, or the record's format was corrected on Discogs), the note is moved to the right base's folder and its tag is changed to match. Everything you wrote in the note is kept. The sync log lists each move.
+
+### 7.4 Cancelling
 
 Press **Cancel** on the sync panel, or run **Cancel running sync**. The plugin finishes the record it is working on and then stops. Records already added are kept, and the next sync carries on from where this one stopped.
 
-### 7.4 When Discogs or Genius is slow
+### 7.5 When Discogs or Genius is slow
 
 The plugin waits between requests to stay within Discogs' limits. If Discogs is busy (HTTP 429 or a server error), it waits 15 seconds and tries again, up to five times. If a request gets no answer within 30 seconds, it retries. Each wait is noted in the sync log.
 
@@ -496,11 +510,14 @@ Files and folders starting with a dot are hidden in Obsidian's file explorer.
 **"Enter your Discogs username…", "Save your Discogs token…" or "Add a base… first"**
 Setup isn't finished. Open **Settings → Discogs music sync and dashboard** and follow the **Getting started** list.
 
-**"Couldn't read your Discogs folders"**
+**"Couldn't read your Discogs collection"**
 Shown by **Set up from Discogs**. Check your username and token with **Test**, then try again.
 
-**"No Discogs folder called "…" — skipped"**
-A base's Discogs folder doesn't match any folder in your Discogs collection. Folder names must match exactly, including capitals. Edit the base; the dialog lists your Discogs folders.
+**"⚠ N records with the format … have no base"**
+Those records aren't synced. Add a base for that format with **Set up from Discogs** or **Add base**, or add the format to an existing base.
+
+**"⚠ <base>: no record in your collection has the format …"**
+Nothing in your collection has that base's formats right now. Nothing is wrong if you haven't bought one yet; otherwise, edit the base and choose the right formats from the list.
 
 **"Discogs didn't accept the token" or errors with 401**
 The token is wrong or has been revoked. Generate a new one on Discogs and paste it in.
@@ -552,11 +569,11 @@ No. Existing notes are never rewritten by a sync. **Refresh prices** changes onl
 **Can I move or rename record notes?**
 Yes, within their base's folder. The sync recognises notes by `discogs_instance`, not by file name. Keep each note in its base's folder and keep its tag, or it drops out of that base.
 
-**Can I use my own Discogs folder names?**
-Yes. Set each base's **Discogs folder** to match.
+**Do I need to sort my records into folders on Discogs?**
+No. Records are placed by format. Discogs folders are ignored.
 
-**What about records in no folder ("Uncategorized")?**
-Add a base whose Discogs folder is `Uncategorized`.
+**Can one base take several formats?**
+Yes, for example `CD`, `CDr` and `SACD` in one CDs base. Each format can belong to only one base.
 
 **Why is a price field empty?**
 Either Discogs has no data for that release, nobody is selling it, or your Seller Settings aren't filled in (for the suggestion fields).

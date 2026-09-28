@@ -38,5 +38,7 @@ export default defineConfig({
 		"anti-slop/no-unsafe-dictionary-type": "error",
 		"anti-slop/no-widen-then-assert": "error",
 		"anti-slop/require-safety-comment-for-type-assertion": "error",
+		// A name that hides another in an outer scope. It caused a real bug (`same` in bases.js).
+		"eslint/no-shadow": "error",
 	},
 });

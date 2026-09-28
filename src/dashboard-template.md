@@ -31,9 +31,9 @@ const distinct = (n) => { const r = ramp(n), h = Math.ceil(n / 2); return r.map(
 const MC = Object.fromEntries(MEDIA.map((m, i) => [m, ramp(MEDIA.length)[i]]));
 const TXT = FG;                                        // chart text: the theme's own body text colour
 const GRID = BORDER;
-const lum = (hex) => { const h = hex.replace("#", ""); const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
+const lum = (fill) => { const h = fill.replace("#", ""); const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255)
   .map((c) => (c <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4)); return .2126 * r + .7152 * g + .0722 * b; };
-const ink = (hex) => (Math.abs(lum(hex) - lum(FG)) > Math.abs(lum(hex) - lum(BG)) ? FG : BG);   // theme text or background, whichever reads on the fill
+const ink = (fill) => (Math.abs(lum(fill) - lum(FG)) > Math.abs(lum(fill) - lum(BG)) ? FG : BG);   // theme text or background, whichever reads on the fill
 const kr = (v) => v == null || v === "" ? "—" : `${Math.round(v).toLocaleString("sv-SE")} kr`;
 // Frontmatter values arrive as whatever was typed. Decode each number once, here: a finite number, or null.
 const num = (v) => { if (v === null || v === undefined || v === "") return null; const n = Number(v); return Number.isFinite(n) ? n : null; };

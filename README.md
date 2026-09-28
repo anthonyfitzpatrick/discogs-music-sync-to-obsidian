@@ -8,7 +8,7 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 
 - **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in SEK.
 - **Genius lyrics links.** Each track links to its lyrics on Genius where a match is found.
-- **Bases.** Each folder in your Discogs collection (Vinyl, CDs, Tapes, or any others you add) syncs into its own folder with its own tag and `.base` view, and appears on the dashboard. You can add, rename and remove bases in settings.
+- **Bases, sorted by format.** Each base takes the records of the formats you choose (Vinyl, CD, Cassette…) from anywhere in your Discogs collection, into its own folder with its own tag and `.base` view, and appears on the dashboard. Placement is automatic: you don't need to file records into folders on Discogs, and formats are picked from the ones in your collection, never typed.
 - **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to `Music/Removed from collection`, never deleted.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
 - **Music Dashboard.** Record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and a list of new records you haven't listened to yet. It is coloured by your active Obsidian theme.
@@ -34,7 +34,7 @@ No Python or other tools are needed. The plugin is plain JavaScript with no buil
 
 1. Open **Settings → Discogs music sync and dashboard**.
 2. Enter your Discogs username, paste your personal access token and press **Test**.
-3. Under **Bases**, press **Set up from Discogs** and tick the Discogs folders to sync.
+3. Under **Bases**, press **Set up from Discogs** and tick the formats to sync.
 4. Run **Sync from Discogs** from the command palette.
 5. Press the disc icon in the ribbon to open the Music Dashboard.
 
