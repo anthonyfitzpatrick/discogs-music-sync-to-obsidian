@@ -2,7 +2,7 @@
 data.json
 
 # Built from src/ by `npm run build`; attached to GitHub releases instead
-main.js
+/main.js
 
 node_modules/
 .DS_Store
