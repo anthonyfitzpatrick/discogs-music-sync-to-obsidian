@@ -27,11 +27,11 @@ const stub = {
 const load = Module._load;
 Module._load = function (req, ...rest) { return req === "obsidian" ? stub : load.call(this, req, ...rest); };
 const Plugin = require(path.join(__dirname, "..", "main.js"));
-const { Engine } = Plugin;
+const { Engine, vaultFiles } = Plugin;
 
 // An in-memory vault whose paths are case-insensitive, like the default macOS and Windows disks.
 function makeVault(entries = {}) {
-  const files = new Map();
+  const files = new Map(), calls = [];   // calls: what went through Obsidian's Vault API
   const put = (p, text = null) => files.set(p.toLowerCase(), { path: p, text });
   for (const [p, t] of Object.entries(entries)) put(p, t);
   const adapter = {
@@ -48,14 +48,17 @@ function makeVault(entries = {}) {
       adapter,
       getAbstractFileByPath: (p) => { const f = files.get(p.toLowerCase()); return f && f.path === p ? f : null; },
       createFolder: async (p) => put(p),
-      create: async (p, t) => { if (files.has(p.toLowerCase())) throw new Error("File already exists"); put(p, t); },
+      create: async (p, t) => { if (files.has(p.toLowerCase())) throw new Error("File already exists"); put(p, t); calls.push(`create ${p}`); },
       process: async (f, fn) => { f.text = fn(f.text); },
+      modify: async (f, text) => { f.text = text; calls.push(`modify ${f.path}`); },
+      createBinary: async (p) => { put(p, "<binary>"); calls.push(`createBinary ${p}`); },
+      modifyBinary: async (f) => { calls.push(`modifyBinary ${f.path}`); },
     },
-    fileManager: { renameFile: async (f, to) => { files.delete(f.path.toLowerCase()); f.path = to; files.set(to.toLowerCase(), f); } },
+    fileManager: { renameFile: async (f, to) => { calls.push(`renameFile ${f.path} → ${to}`); files.delete(f.path.toLowerCase()); f.path = to; files.set(to.toLowerCase(), f); } },
     plugins: { enabledPlugins: new Set(), plugins: {} },
     workspace: { getLeavesOfType: () => [] },
   };
-  return { app, files, text: (p) => files.get(p.toLowerCase())?.text };
+  return { app, files, calls, text: (p) => files.get(p.toLowerCase())?.text };
 }
 
 // A collection item as Discogs sends it.
@@ -303,4 +306,20 @@ test("a base whose format no record has is reported", async () => {
   const { eng, log } = makeEngine(makeVault(), [VINYL, minidiscs], [item(1, ["Vinyl"])]);
   await eng.syncAll();
   assert.ok(log.some((l) => /Minidiscs: no record in your collection has the format Minidisc/.test(l)));
+});
+
+test("the sync works through Obsidian's Vault API, so Obsidian's index sees every change at once", async () => {
+  // Writing past Obsidian to the disk left Dataview, and so the dashboard, showing a moved record in its old base.
+  const vault = makeVault({ "Music": null, "Music/Vinyl": null, "Music/CDs": null, "Music/Vinyl/covers": null, "Music/CDs/covers": null,
+    "Music/Vinyl/Misfiled.md": noteFor(5, "vinyl-library", "Bought at a fair."), "Music/Music Dashboard.md": "old" });
+  const log = [];
+  const eng = new Engine(vaultFiles(vault.app), (l) => log.push(l), () => false, { username: "someone", lyrics: false, gallery: false, libraries: [VINYL, CDS] });
+  eng.discogs = makeEngine(vault, [VINYL, CDS], [item(5, ["CD"]), item(6, ["Vinyl"])]).eng.discogs;
+  await eng.syncAll();
+  await eng.dashboard();
+  assert.ok(vault.calls.includes("renameFile Music/Vinyl/Misfiled.md → Music/CDs/Misfiled.md"), "moved with Obsidian's file manager, so links follow");
+  assert.ok(vault.calls.some((c) => c.startsWith("modify Music/Vinyl/Misfiled.md")), "retagged through the vault");
+  assert.ok(vault.calls.some((c) => /^create Music\/Vinyl\/.*\.md$/.test(c)), "new notes created through the vault");
+  assert.ok(vault.calls.includes("modify Music/Music Dashboard.md"), "the dashboard note is rewritten through the vault");
+  assert.match(vault.text("Music/CDs/Misfiled.md"), /  - cd-library\n[\s\S]*Bought at a fair\./);
 });

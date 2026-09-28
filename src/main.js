@@ -9,7 +9,7 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const MUSIC = "Music";
 const DASHBOARD = "Music/Music Dashboard.md";
 const ALL_MEDIA_BASE = "Music/All Media.base";
-const VERSION = "0.10.0";
+const VERSION = "0.10.1";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Bundled as text by esbuild (see esbuild.config.mjs), so the dashboard ships inside main.js.
 const DASHBOARD_TEMPLATE = require("./dashboard-template.md");
@@ -65,6 +65,37 @@ const artistOk = (want, got) => {
 };
 const titleOk = (got, want) => got === want || (Math.min(got.length, want.length) >= 6 && (got.startsWith(want) || want.startsWith(got)));
 const splitArtists = (a) => [a, ...String(a).split(/\s+(?:featuring|feat\.?|ft\.?|with|and|&)\s+|\s*[·,\/]\s*/i)].map((x) => x.trim()).filter((x, i, arr) => x && x.toLowerCase() !== "various" && arr.indexOf(x) === i);
+
+/* ------------------------------------------------------------------ files */
+// The engine's file access, through Obsidian's Vault API rather than straight to disk, so Obsidian's
+// index — and with it Dataview and the dashboard — sees every new, changed and moved note at once,
+// and a moved note's links follow it. Dot-folders such as Music/.vinyl-sync aren't indexed by
+// Obsidian, so files there are written directly.
+function vaultFiles(app) {
+  const vault = app.vault, adapter = vault.adapter;
+  const hidden = (p) => p.split("/").some((part) => part.startsWith("."));
+  const file = (p) => vault.getAbstractFileByPath(p);
+  return {
+    exists: (p) => adapter.exists(p),
+    read: (p) => adapter.read(p),
+    list: (p) => adapter.list(p),
+    async mkdir(p) { if (hidden(p)) await adapter.mkdir(p); else if (!file(p)) await vault.createFolder(p); },
+    async write(p, text) {
+      if (hidden(p)) return adapter.write(p, text);
+      const f = file(p);
+      if (f) await vault.modify(f, text); else await vault.create(p, text);
+    },
+    async writeBinary(p, data) {
+      if (hidden(p)) return adapter.writeBinary(p, data);
+      const f = file(p);
+      if (f) await vault.modifyBinary(f, data); else await vault.createBinary(p, data);
+    },
+    async rename(from, to) {
+      const f = file(from);
+      if (f) await app.fileManager.renameFile(f, to); else await adapter.rename(from, to);
+    },
+  };
+}
 
 /* ------------------------------------------------------------------ engine */
 class Engine {
@@ -660,9 +691,10 @@ class MusicLibrarySync extends Plugin {
           displayHeaderFooter: true, headerTemplate: "<div></div>", footerTemplate: footer,
         });
         const dir = `${MUSIC}/Exports`;
-        if (!(await this.app.vault.adapter.exists(dir))) await this.app.vault.adapter.mkdir(dir);
+        const files = vaultFiles(this.app);
+        if (!(await files.exists(dir))) await files.mkdir(dir);
         const out = `${dir}/Music Dashboard ${moment().format("YYYY-MM-DD HHmm")} ${size} ${orientation}.pdf`;
-        await this.app.vault.adapter.writeBinary(out, pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength));
+        await files.writeBinary(out, pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength));
         notice.hide();
         new Notice(`PDF saved: ${out}`, 8000);
         try { this.app.openWithDefaultApp(out); }   // the notice above already gives the path
@@ -737,7 +769,7 @@ class MusicLibrarySync extends Plugin {
     const lines = [];
     const log = (l) => { lines.push(l); s.log = lines.slice(-400).join("\n"); s.now = l.trim(); this.refresh(); };
     const d = this.data;
-    const eng = new Engine(this.app.vault.adapter, log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs });
+    const eng = new Engine(vaultFiles(this.app), log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs });
     const steps = mode === "dashboard" ? [] : libs;
     const work = steps.length + 1;
     let failed = false, created = 0, priced = 0;
@@ -1034,3 +1066,4 @@ class MusicSettingTab extends PluginSettingTab {
 
 module.exports = MusicLibrarySync;
 module.exports.Engine = Engine;          // exported for testing
+module.exports.vaultFiles = vaultFiles;
