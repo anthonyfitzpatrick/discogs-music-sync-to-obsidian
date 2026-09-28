@@ -261,8 +261,8 @@
 .mls-getting-started li { margin: 2px 0; }
 .mls-getting-started li.is-done { color: var(--text-muted); text-decoration: line-through; }
 
-/* Record notes (cssclasses: vinyl-record): Properties sit below the note, not above it.
-   The data stays in the frontmatter, so the .base views keep working. */
+/* Record notes (cssclasses: vinyl-record): in editing view, Properties sit below the note.
+   The data stays in the frontmatter. */
 /* Editing / Live Preview */
 .vinyl-record.markdown-source-view .cm-sizer {
   display: flex;
@@ -283,22 +283,9 @@
 }
 .vinyl-record.markdown-source-view .cm-sizer > :not(.inline-title):not(.cm-contentContainer):not(.metadata-container) { order: 3; }
 
-/* Reading view: move the header block (properties) below the content.
-   The note's own "# Artist – Album" heading serves as the title there. */
-.vinyl-record.markdown-preview-view .markdown-preview-sizer {
-  display: flex;
-  flex-direction: column;
-}
-.vinyl-record.markdown-preview-view .markdown-preview-sizer > .markdown-preview-pusher { order: 0; }
-.vinyl-record.markdown-preview-view .markdown-preview-sizer > div { order: 1; }
-.vinyl-record.markdown-preview-view .markdown-preview-sizer > .mod-header {
-  order: 2;
-  margin-top: 1em;
-  padding-top: 0.75em;
-  border-top: 1px solid var(--background-modifier-border);
-}
-.vinyl-record.markdown-preview-view .mod-header .inline-title { display: none; }
-.vinyl-record.markdown-preview-view .markdown-preview-sizer > .mod-footer { order: 3; }
+/* Reading view is left in Obsidian's own order. It draws a note in sections, placing each by where
+   it sits on the page; moving the properties below the content with flex order broke that, and a
+   record opened in reading view showed only its last heading, "Notes". */
 
 /* Keep the Notes heading compact when the section is empty */
 .vinyl-record .markdown-preview-sizer > div:has(> h2[data-heading="Notes"]):last-of-type h2,
