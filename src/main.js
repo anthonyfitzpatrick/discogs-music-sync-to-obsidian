@@ -1,13 +1,16 @@
 /* Discogs music sync and dashboard (plugin ID music-library-sync) — Wolf 359 Press.
    Pure JavaScript: talks to Discogs + Genius with Obsidian's requestUrl and writes notes
    through the vault adapter. No Python required.
-   Safety: never overwrites an existing album note (except price fields on "Refresh prices")
-   and never touches "Music/Vinyl Record Library.md". */
+   Safety: never overwrites an existing album note (except price fields on "Refresh prices").
+   Assumes nothing about the vault: every folder comes from the settings. */
 const obsidian = require("obsidian");
 const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting } = obsidian;
 
-const MUSIC = "Music";
-const VERSION = "0.11.3";
+// The library folder a new install starts with; the user can choose another in settings.
+const DEFAULT_FOLDER = "Music";
+// A folder path as typed, cleaned: no leading/trailing slashes, single slashes, no empty parts.
+const cleanFolder = (v) => String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
+const VERSION = "0.11.4";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
@@ -22,20 +25,15 @@ const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidi
 
 // A "base" (library) takes the records of one or more Discogs formats into its own vault folder, with
 // its own tag, and its own place in the Library and Dashboard views. A new install starts with none and
-// sets them up from the formats in the user's collection; these three are for installs from before 0.8,
-// whose settings predate the list of bases.
-const LEGACY_LIBRARIES = [
-  { id: "vinyl", name: "Vinyl", formats: ["Vinyl"],    dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3" },
-  { id: "cds",   name: "CDs",   formats: ["CD"],       dir: "Music/CDs",   tag: "cd-library",    icon: "disc" },
-  { id: "tapes", name: "Tapes", formats: ["Cassette"], dir: "Music/Tapes", tag: "tape-library",  icon: "cassette-tape" },
-];
-const DEFAULTS = { last: null, username: "", lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" },
+// sets them up from the formats in the user's collection.
+const DEFAULTS = { last: null, username: "", folder: DEFAULT_FOLDER, lyrics: true, gallery: true, pdf: { size: "A4", orientation: "portrait" },
   value: null,                                   // Discogs' own value of the collection, fetched with each sync
   tab: "dashboard",                              // the Music tab shown last: dashboard or library
   library: { base: "", view: "gallery", sort: "", search: "" },   // the Library's last choices
   legacyFiles: [] };                             // files earlier versions made, offered for removal in settings
-// Files earlier versions kept in the vault, which the plugin no longer uses. Offered for removal in
-// settings, never removed without asking. (The .base files of each base are added from settings.)
+// Files versions before 0.11 kept in the vault, which the plugin no longer uses. Those versions always
+// used a folder called Music, so only there. Offered for removal in settings, never removed without
+// asking; in any other vault they simply aren't found. (Each base's .base file is added on loading.)
 const LEGACY_FILES = ["Music/Music Dashboard.md", "Music/All Media.base", "Music/.discogs-token", "Music/.genius-token",
   "Music/.vinyl-sync/collection-value.json", "Music/.vinyl-sync/last-export.html"];
 // Tokens live in Obsidian's local storage for this vault on this device: never in a file, so never in git.
@@ -111,7 +109,7 @@ class Engine {
   constructor(adapter, log, isCancelled, cfg) {
     this.fs = adapter; this.log = log; this.isCancelled = isCancelled || (() => false);
     // cfg: also discogsToken and geniusToken, handed over by the plugin
-    this.cfg = Object.assign({ username: "", lyrics: true, gallery: true, libraries: [], discogsToken: "", geniusToken: "" }, cfg);
+    this.cfg = Object.assign({ username: "", folder: DEFAULT_FOLDER, lyrics: true, gallery: true, libraries: [], discogsToken: "", geniusToken: "" }, cfg);
     this.last = { discogs: 0, genius: 0 };
     this.noSuggest = false;
   }
@@ -272,7 +270,7 @@ class Engine {
     const inCollection = new Set(items.map((i) => i.instance));
     for (const [inst, note] of where) {
       if (inCollection.has(inst)) continue;
-      await this.moveNote(note.path, `${MUSIC}/Removed from collection`, note.lib.tag, "removed-from-collection", `removed_from_collection: ${today()}`);
+      await this.moveNote(note.path, `${this.cfg.folder}/Removed from collection`, note.lib.tag, "removed-from-collection", `removed_from_collection: ${today()}`);
       this.removed = (this.removed || 0) + 1;
       this.log(`  − ${note.path.split("/").pop().replace(/\.md$/, "")} is no longer in your Discogs collection → moved to "Removed from collection"`);
       where.delete(inst);
@@ -443,7 +441,7 @@ class ExportModal extends Modal {
       dd.addOption("portrait", "Portrait").addOption("landscape", "Landscape");
       dd.setValue(opts.orientation).onChange((v) => (opts.orientation = v));
     });
-    new Setting(this.contentEl).setName("Saved to").setDesc("Music/Exports in your vault, then opened in your PDF viewer.");
+    new Setting(this.contentEl).setName("Saved to").setDesc(`${this.plugin.data.folder}/Exports in your vault, then opened in your PDF viewer.`);
     new Setting(this.contentEl)
       .addButton((b) => b.setButtonText("Cancel").onClick(() => this.close()))
       .addButton((b) => b.setButtonText("Export PDF").setCta().onClick(async () => {
@@ -461,8 +459,8 @@ class MusicLibrarySync extends Plugin {
   async onload() {
     const saved = await this.loadData();
     this.data = Object.assign(structuredClone(DEFAULTS), saved);
-    if (!Array.isArray(this.data.libraries)) this.data.libraries = saved ? structuredClone(LEGACY_LIBRARIES) : [];
-    if (saved && saved.username === undefined) this.data.username = "discogs-user";   // pre-0.8 settings were the author's own
+    if (!Array.isArray(this.data.libraries)) this.data.libraries = [];
+    this.data.folder = cleanFolder(this.data.folder) || DEFAULT_FOLDER;
     // Before 0.10 a base synced a Discogs folder. The folders were named after their formats (Vinyl,
     // CD, Cassette), which are Discogs' own spellings, so each becomes the format its base takes.
     for (const lib of this.data.libraries) if (!Array.isArray(lib.formats)) { lib.formats = [lib.discogsFolder || lib.name]; delete lib.discogsFolder; }
@@ -488,7 +486,7 @@ class MusicLibrarySync extends Plugin {
     this.registerInterval(window.setInterval(() => this.refresh(), 60 * 1000));
     // The views follow the notes: redraw shortly after record notes change, move or go, and on theme changes.
     const soon = () => { window.clearTimeout(this.redrawTimer); this.redrawTimer = window.setTimeout(() => this.redrawViews(), 600); };
-    const inMusic = (path) => String(path ?? "").startsWith(`${MUSIC}/`);
+    const inMusic = (path) => [this.data.folder, ...this.data.libraries.map((l) => l.dir)].some((d) => String(path ?? "").startsWith(`${d}/`));
     this.registerEvent(this.app.metadataCache.on("changed", (file) => { if (inMusic(file?.path)) soon(); }));
     this.registerEvent(this.app.vault.on("rename", (file, oldPath) => { if (inMusic(file?.path) || inMusic(oldPath)) soon(); }));
     this.registerEvent(this.app.vault.on("delete", (file) => { if (inMusic(file?.path)) soon(); }));
@@ -538,7 +536,7 @@ class MusicLibrarySync extends Plugin {
     if (problem) return problem;
     const name = tidy(v.name);
     const fs = this.app.vault.adapter;
-    if (!self && (await fs.exists(`${MUSIC}/${name}`))) return `Music already has a folder called “${name}”.`;
+    if (!self && (await fs.exists(`${this.data.folder}/${name}`))) return `${this.data.folder} already has a folder called “${name}”.`;
     return "";
   }
 
@@ -547,7 +545,7 @@ class MusicLibrarySync extends Plugin {
     const err = await this.checkLibrary(v); if (err) throw new Error(err);
     const name = tidy(v.name), s = slug(name);
     let id = s, n = 2; while (this.data.libraries.some((l) => l.id === id)) id = `${s}-${n++}`;
-    const lib = { id, name, formats: [...v.formats], dir: `${MUSIC}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3" };
+    const lib = { id, name, formats: [...v.formats], dir: `${this.data.folder}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3" };
     await this.ensureLibraryFiles(lib);
     this.data.libraries.push(lib);
     await this.save();
@@ -567,7 +565,6 @@ class MusicLibrarySync extends Plugin {
   // Creates the base's folder if it's missing.
   async ensureLibraryFiles(lib) {
     const vault = this.app.vault;
-    if (!vault.getAbstractFileByPath(MUSIC)) await vault.createFolder(MUSIC);
     if (!vault.getAbstractFileByPath(lib.dir)) await vault.createFolder(lib.dir);
   }
 
@@ -595,7 +592,7 @@ class MusicLibrarySync extends Plugin {
   saveToken(kind, value) { this.app.saveLocalStorage(TOKEN_KEYS[kind], value.trim() || null); this.formatCache = null; }
   // Tokens kept in files by earlier versions are read in once; the files are then offered for removal.
   async importTokenFiles() {
-    for (const [kind, file] of [["discogs", `${MUSIC}/.discogs-token`], ["genius", `${MUSIC}/.genius-token`]]) {
+    for (const [kind, file] of [["discogs", "Music/.discogs-token"], ["genius", "Music/.genius-token"]]) {   // where versions before 0.11 kept them
       if (this.token(kind) || !(await this.app.vault.adapter.exists(file))) continue;
       const t = (await this.app.vault.adapter.read(file)).trim();
       if (t) this.saveToken(kind, t);
@@ -707,7 +704,7 @@ class MusicLibrarySync extends Plugin {
           margins: { top: MARGIN, bottom: MARGIN + 0.1, left: MARGIN, right: MARGIN },
           displayHeaderFooter: true, headerTemplate: "<div></div>", footerTemplate: footer,
         });
-        const dir = `${MUSIC}/Exports`;
+        const dir = `${this.data.folder}/Exports`;
         const files = vaultFiles(this.app);
         if (!(await files.exists(dir))) await files.mkdir(dir);
         const out = `${dir}/Music Dashboard ${moment().format("YYYY-MM-DD HHmm")} ${size} ${orientation}.pdf`;
@@ -787,7 +784,7 @@ class MusicLibrarySync extends Plugin {
     const log = (l) => { lines.push(l); s.log = lines.slice(-400).join("\n"); s.now = l.trim(); this.refresh(); };
     const d = this.data;
     const eng = new Engine(vaultFiles(this.app), log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs,
-      discogsToken: this.token("discogs"), geniusToken: this.token("genius") });
+      discogsToken: this.token("discogs"), geniusToken: this.token("genius"), folder: d.folder });
     const steps = mode === "dashboard" ? [] : libs;
     const work = steps.length + 1;
     let failed = false, created = 0, priced = 0;
@@ -894,7 +891,7 @@ class LibraryModal extends Modal {
       const n = ++seq, e = await plugin.checkLibrary(v, lib);
       if (n !== seq) return;                                    // a newer change is already being checked
       err.setText(touched ? e : ""); save.setDisabled(!!e);
-      if (preview) { const name = tidy(v.name); preview.setText(name && !e ? `Creates ${MUSIC}/${name}/ and the tag #${slug(name)}-library.` : ""); }
+      if (preview) { const name = tidy(v.name); preview.setText(name && !e ? `Creates ${plugin.data.folder}/${name}/ and the tag #${slug(name)}-library.` : ""); }
     };
     check();
   }
@@ -919,7 +916,7 @@ class SetupModal extends Modal {
     status.setText("Tick the formats to sync. Each becomes a base with the format's name, which you can rename afterwards. A record with several formats (a box set, say) goes to the base of its first format that has one.");
     const pick = new Map(free.map((f) => [f.name, true]));
     for (const f of free) new Setting(c).setName(f.name)
-      .setDesc(`${f.count} record${f.count === 1 ? "" : "s"}. Creates ${MUSIC}/${f.name}/`)
+      .setDesc(`${f.count} record${f.count === 1 ? "" : "s"}. Creates ${plugin.data.folder}/${f.name}/`)
       .addToggle((t) => t.setValue(true).onChange((x) => pick.set(f.name, x)));
     const out = c.createDiv({ cls: "mls-form-error" });
     new Setting(c)
@@ -973,6 +970,18 @@ class MusicSettingTab extends PluginSettingTab {
     }
 
     new Setting(el).setName("Discogs").setHeading();
+    new Setting(el).setName("Library folder")
+      .setDesc("Where new bases get their folders, and where removed records and PDF exports go. Existing bases keep their folders.")
+      .addText((t) => {
+        t.setPlaceholder(DEFAULT_FOLDER).setValue(d.folder);
+        t.inputEl.addEventListener("change", async () => {
+          const f = cleanFolder(t.getValue());
+          if (!f || f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) {
+            new Notice("Choose a folder name without \\ : * ? \" < > | # ^ [ ] and not starting with a dot"); t.setValue(d.folder); return;
+          }
+          d.folder = f; t.setValue(f); await P.save();
+        });
+      });
     new Setting(el).setName("Username").setDesc("The Discogs account whose collection is synced.")
       .addText((t) => t.setPlaceholder("your-discogs-name").setValue(d.username || "").onChange(async (x) => { d.username = x.trim(); P.formatCache = null; await P.save(); }));
     this.token(el, saved.discogs, "Personal access token", "discogs",

@@ -73,6 +73,12 @@ function makeVault(entries = {}) {
 const item = (instance, formats) => ({ id: instance * 10, instance_id: instance, date_added: "2026-09-01T12:00:00-07:00", notes: [],
   basic_information: { formats: formats.map((name) => ({ name, qty: "1" })) } });
 
+// Three bases as saved settings, for the tests that need some.
+const THREE = () => ({ username: "someone", libraries: [
+  { id: "vinyl", name: "Vinyl", formats: ["Vinyl"], dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3" },
+  { id: "cds", name: "CDs", formats: ["CD"], dir: "Music/CDs", tag: "cd-library", icon: "disc" },
+  { id: "tapes", name: "Tapes", formats: ["Cassette"], dir: "Music/Tapes", tag: "tape-library", icon: "cassette-tape" }] });
+
 async function makePlugin(saved, entries) {
   const v = makeVault(entries);
   const p = new Plugin();
@@ -88,11 +94,26 @@ test("a new install starts with no username and no bases", async () => {
   assert.deepStrictEqual(p.data.libraries, []);
 });
 
-test("settings from before 0.8 get the original three bases and username", async () => {
+test("settings without bases or a username get none: nothing is assumed about the user", async () => {
   const { p } = await makePlugin({ last: null, pdf: { size: "A4", orientation: "landscape" } });
-  assert.deepStrictEqual(p.data.libraries.map((l) => [l.name, l.formats]), [["Vinyl", ["Vinyl"]], ["CDs", ["CD"]], ["Tapes", ["Cassette"]]]);
-  assert.strictEqual(p.data.username, "discogs-user");
+  assert.deepStrictEqual(p.data.libraries, []);
+  assert.strictEqual(p.data.username, "");
+  assert.strictEqual(p.data.folder, "Music", "the default library folder");
   assert.strictEqual(p.data.pdf.orientation, "landscape");
+});
+
+test("the library folder decides where new bases, removed records and PDFs go", async () => {
+  const { p, app } = await makePlugin({ username: "someone", libraries: [], folder: " /Collection//Records/ " });
+  assert.strictEqual(p.data.folder, "Collection/Records", "tidied when loaded");
+  const lib = await p.addLibrary({ name: "Vinyl", formats: ["Vinyl"] });
+  assert.strictEqual(lib.dir, "Collection/Records/Vinyl");
+  assert.ok(app.vault.getAbstractFileByPath("Collection/Records/Vinyl"));
+  assert.strictEqual(app.vault.getAbstractFileByPath("Music"), null, "no Music folder is made");
+  const vault = makeVault({ "Collection/Records/Vinyl/Sold.md": noteFor(9, "vinyl-library", "x") });
+  const { eng } = makeEngine(vault, [{ ...VINYL, dir: "Collection/Records/Vinyl" }], []);
+  eng.cfg.folder = "Collection/Records";
+  await eng.syncAll();
+  assert.ok(vault.text("Collection/Records/Removed from collection/Sold.md"), "removed records go under the library folder");
 });
 
 test("saved bases and username are kept as they are", async () => {
@@ -130,7 +151,7 @@ test("adding a base creates only its folder: no .base files or other files", asy
 
 test("checking a base adds the vault's own clashes to the naming rules", async () => {
   // The naming rules themselves are tested directly in bases.test.js.
-  const { p } = await makePlugin({ last: null }, { "Music/Exports": null });
+  const { p } = await makePlugin(THREE(), { "Music/Exports": null });
   const check = (name, self = null) => p.checkLibrary({ name, formats: self ? self.formats : ["Minidisc"] }, self);
   assert.match(await check("vinyl"), /already a base called “Vinyl”/, "the naming rules apply");
   assert.match(await check("Exports"), /already has a folder called “Exports”/);
@@ -139,7 +160,7 @@ test("checking a base adds the vault's own clashes to the naming rules", async (
 });
 
 test("renaming a base changes its name only; its notes stay where they are", async () => {
-  const { p } = await makePlugin({ last: null });
+  const { p } = await makePlugin(THREE());
   const tapes = p.data.libraries[2];
   await p.updateLibrary(tapes, { name: "Cassettes", formats: ["Cassette", "Microcassette"] });
   assert.deepStrictEqual([tapes.name, tapes.formats, tapes.dir, tapes.tag], ["Cassettes", ["Cassette", "Microcassette"], "Music/Tapes", "tape-library"]);

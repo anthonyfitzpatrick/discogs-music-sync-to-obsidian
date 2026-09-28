@@ -1,7 +1,7 @@
 {
   "id": "music-library-sync",
   "name": "Discogs music sync and dashboard",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "minAppVersion": "1.9.0",
   "description": "Sync your Discogs collection into album notes with covers, tracklists, lyrics links and prices, sorted into bases by format, with a built-in Music Dashboard and Music Library. Needs no other plugin.",
   "author": "Wolf 359 Press",

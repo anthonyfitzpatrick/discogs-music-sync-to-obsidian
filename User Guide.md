@@ -52,7 +52,7 @@ The plugin is careful with your notes:
 
 - A sync only **adds** records. It never overwrites a note that already exists, so anything you write in a record note is safe.
 - **Refresh prices** changes only the price fields.
-- When you remove a record from Discogs, its note is **moved** to `Music/Removed from collection`, never deleted.
+- When you remove a record from Discogs, its note is **moved** to *Removed from collection* in your library folder, never deleted.
 
 ## 2. Requirements
 
@@ -121,7 +121,7 @@ Every record on Discogs has a format, such as Vinyl, CD or Cassette. The plugin 
 2. The dialog reads your collection and lists every format in it, with how many records have each. All are ticked; untick any you don't want.
 3. Press **Add bases**.
 
-Each ticked format becomes a base with the format's name, for example `Vinyl` becomes the folder `Music/Vinyl/` and the tag `#vinyl-library`, with an icon to match. You can rename bases afterwards (see [6.3](#63-editing-and-renaming-a-base)), or add more with **Add base** (see [6.2](#62-adding-a-base)).
+Each ticked format becomes a base with the format's name, for example `Vinyl` becomes the folder `Music/Vinyl/` (in your library folder, see [5.1](#51-library-folder-and-discogs)) and the tag `#vinyl-library`, with an icon to match. You can rename bases afterwards (see [6.3](#63-editing-and-renaming-a-base)), or add more with **Add base** (see [6.2](#62-adding-a-base)).
 
 ### 4.5 Run the first sync
 
@@ -135,8 +135,9 @@ You can keep working in Obsidian while it runs; the panel at the top of the dash
 
 Open **Settings → Discogs music sync and dashboard**. Changes are saved as you make them and apply from the next sync.
 
-### 5.1 Discogs
+### 5.1 Library folder and Discogs
 
+- **Library folder**: the folder new bases get their folders in, and where removed records and PDF exports go. It is `Music` unless you change it, and can be anywhere in your vault, such as `Collections/Records`. Bases you already have keep their folders.
 - **Username**: the Discogs account whose collection is synced.
 - **Personal access token**: paste a token and press Enter to save it. The field is masked and always shows empty; the description says whether a token is saved on this device. Paste a new token at any time to replace it.
 - **Test**: checks the saved token with Discogs.
@@ -186,7 +187,7 @@ The bottom of the page shows the plugin's version, and buttons to report a bug, 
 
 A base takes every record of the formats you choose, from anywhere in your Discogs collection, into:
 
-- its own **folder** inside `Music/`, which holds its record notes, a `covers/` folder and an `images/` folder,
+- its own **folder** inside your library folder, which holds its record notes, a `covers/` folder and an `images/` folder,
 - its own **tag**, such as `#vinyl-library`, which every record note in it carries,
 - its own place in the **Music Library** and on the **Music Dashboard**.
 
@@ -206,7 +207,7 @@ Say you've started collecting MiniDiscs and added some to your Discogs collectio
 2. Enter a **Name**, for example `MiniDiscs`. This becomes the folder name and the name in the Library and on the Dashboard.
 3. Under **Formats**, turn on the formats the base takes, for example `Minidisc`. The dialog lists every format in your collection with its record count; formats another base already takes are shown as taken and can't be turned on. If your collection can't be read, formats can't be chosen: check your username and token with **Test**.
 4. Choose an **Icon**. It is shown in the settings list and in the sync progress.
-5. The dialog shows what it will create, for example: *Creates Music/MiniDiscs/ and the tag #minidiscs-library.*
+5. The dialog shows what it will create, for example: *Creates Music/MiniDiscs/ and the tag #minidiscs-library.* (`Music` is your library folder.)
 6. Press **Add base**.
 
 The folder is created straight away. The next sync fills the base with records. If a base's folder goes missing later, the next sync creates it again.
@@ -226,7 +227,7 @@ Each base must have its own name. The **Add base** and **Save** buttons stay dis
 - **another base already has that name.** Capitals and extra spaces don't count, so `vinyl`, `VINYL` and `  Vinyl ` are all the same as `Vinyl`.
 - **the name is too close to another base's.** Names that differ only in punctuation or spacing, such as `Mini Disc` and `Mini-Disc`, would produce the same tag.
 - **no format is chosen**, or **a chosen format already belongs to another base**. Each format can belong to only one base.
-- **`Music/` already has a folder with that name**, such as `Exports` or `Removed from collection`.
+- **your library folder already has a folder with that name**, such as `Exports` or `Removed from collection`.
 - **the name contains a character that isn't allowed in file names** (`\ / : * ? " < > | # ^ [ ]`), or starts with a dot.
 - the name is empty, has no letters or numbers, or is longer than 60 characters.
 
@@ -262,7 +263,7 @@ The same album can be in your collection more than once; each copy gets its own 
 
 ### 7.2 Records you remove from Discogs
 
-If a record is no longer anywhere in your Discogs collection, its note is moved to `Music/Removed from collection`. Its tag is changed to `#removed-from-collection` and a `removed_from_collection` date is added, so it drops out of the bases and the dashboard but keeps everything you wrote in it.
+If a record is no longer anywhere in your Discogs collection, its note is moved to *Removed from collection* in your library folder. Its tag is changed to `#removed-from-collection` and a `removed_from_collection` date is added, so it drops out of the bases and the dashboard but keeps everything you wrote in it.
 
 Moving a record between folders on Discogs changes nothing: folders don't decide where records go.
 
@@ -465,7 +466,7 @@ The count on the right says how many records are shown. Click a record to open i
 2. Choose the **Paper size** and **Orientation**.
 3. Press **Export PDF**.
 
-The PDF has the same sections, figures and charts as the dashboard, drawn by the plugin itself. Charts and tables are kept whole on a page, and every page has a footer with the date and page number. On landscape pages, charts sit two to a row; on portrait pages, one. The PDF is saved in `Music/Exports` as, for example, `Music Dashboard 2026-09-28 2105 A4 landscape.pdf`, and opened in your PDF viewer.
+The PDF has the same sections, figures and charts as the dashboard, drawn by the plugin itself. Charts and tables are kept whole on a page, and every page has a footer with the date and page number. On landscape pages, charts sit two to a row; on portrait pages, one. The PDF is saved in `Exports` in your library folder as, for example, `Music Dashboard 2026-09-28 2105 A4 landscape.pdf`, and opened in your PDF viewer.
 
 The PDF uses your theme's colours. With a dark theme, pages have a dark background.
 
@@ -492,22 +493,24 @@ The ribbon's **disc** icon opens **Music**, on the tab you used last.
 
 | Path | Contents |
 |---|---|
-| `Music/<Base>/` | Record notes of one base |
-| `Music/<Base>/covers/`, `Music/<Base>/images/` | Front covers and other photos |
-| `Music/Removed from collection/` | Notes of records you've removed from Discogs |
-| `Music/Exports/` | PDFs you export |
+| `<library folder>/<Base>/` | Record notes of one base |
+| `<library folder>/<Base>/covers/`, `…/images/` | Front covers and other photos |
+| `<library folder>/Removed from collection/` | Notes of records you've removed from Discogs |
+| `<library folder>/Exports/` | PDFs you export |
+
+The library folder is `Music` unless you change it in settings.
 
 **In the plugin** — everything else:
 
 | What | Where |
 |---|---|
 | The Music view, its Dashboard and Library tabs, charts and layout | The plugin's code |
-| Settings, bases, the last run, the collection value, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
+| Settings (including the library folder), bases, the last run, the collection value, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
 | Discogs and Genius tokens | Obsidian's local storage for this vault on this device |
 
 ## 15. Upgrading from an earlier version
 
-Earlier versions kept some things in your vault. From 0.11 the plugin does it all itself:
+Earlier versions kept some things in your vault, always in `Music/`. From 0.11 the plugin does it all itself:
 
 | Earlier | Now |
 |---|---|

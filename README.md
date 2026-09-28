@@ -9,7 +9,7 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 - **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in SEK.
 - **Genius lyrics links.** Each track links to its lyrics on Genius where a match is found.
 - **Bases, sorted by format.** Each base takes the records of the formats you choose (Vinyl, CD, Cassette…) from anywhere in your Discogs collection, into its own folder with its own tag. Placement is automatic: you don't need to file records into folders on Discogs, and formats are picked from the ones in your collection, never typed.
-- **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to `Music/Removed from collection`, never deleted.
+- **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to a *Removed from collection* folder, never deleted.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
 - **One Music view, two tabs.** The disc icon opens the plugin's own view, with the sync panel at the top and a Dashboard tab and a Library tab.
 - **Dashboard.** record counts, playing time, what the collection is worth, the most valuable records, genres, styles, decades, top artists, buying history, and new records you haven't listened to yet, with its own charts. Albums open their notes. Coloured by your active Obsidian theme.
@@ -33,7 +33,7 @@ No other plugin is needed.
 
 ## Quick start
 
-1. Open **Settings → Discogs music sync and dashboard**.
+1. Open **Settings → Discogs music sync and dashboard**. Optionally choose the **Library folder** (`Music` unless you change it).
 2. Enter your Discogs username, paste your personal access token and press **Test**.
 3. Under **Bases**, press **Set up from Discogs** and tick the formats to sync.
 4. Press the disc icon in the ribbon to open **Music**, and press **Sync from Discogs**.
@@ -51,7 +51,6 @@ The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 
 - Prices are in Swedish kronor (SEK).
 - Discogs price suggestions (the Low, Mid, High and Mint estimates) only appear once your Discogs Seller Settings are filled in. Without them, the dashboard uses the cheapest current listing instead.
-- The Music folder is fixed at `Music/` in the root of the vault.
 - Renaming a base doesn't move its notes to a folder of the new name.
 - Tokens are kept per device: enter them on each computer you use.
 - Desktop only, because PDF export uses Electron.
