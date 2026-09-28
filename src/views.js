@@ -86,7 +86,7 @@ class DashboardPane {
 
   async render() {
     const theme = { ...this.plugin.themeForReport(), font: "inherit" };
-    const { body, css } = reportParts(await this.plugin.collectRecords(), this.plugin.baseNames(), this.plugin.collectionValue(), theme, true);
+    const { body, css } = reportParts(await this.plugin.collectRecords(), this.plugin.baseNames(), this.plugin.collectionValue(), theme, true, this.plugin.reportOptions());
     this.styleEl.setText(css);
     // The report is built as markup with every value escaped (report.js); parsed here into nodes.
     const parsed = new DOMParser().parseFromString(`<div>${body}</div>`, "text/html").body.firstElementChild;

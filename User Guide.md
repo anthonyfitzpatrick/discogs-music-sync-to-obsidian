@@ -166,18 +166,29 @@ See [section 6](#6-bases).
 
 Shown only if your vault still has files that earlier versions of the plugin made and this version no longer uses (see [section 15](#15-upgrading-from-an-earlier-version)). It lists them, and **Move to trash** moves them to your system trash after asking, so you can get them back.
 
-### 5.5 Sync
+### 5.5 Dashboard
+
+A switch for each of the dashboard's fourteen sections (see [section 10](#10-the-music-dashboard)). Turn off the ones you don't want; they are left out of the dashboard and its PDF.
+
+### 5.6 Colours
+
+- **Chart colours**: **Theme** (shades of your theme's colours, the default), **Full colour** (the plugin's original purple, pink and orange) or **Custom**.
+- With **Custom**: a colour picker for each base, and an **Accent** colour for charts with many parts and for value scales.
+
+Text, lines and backgrounds always follow your theme.
+
+### 5.7 Sync
 
 - **Download all images**: when on, every Discogs photo of a new record is saved and shown under **Images** in its note. When off, only the front cover is downloaded, which makes syncing faster and uses less space.
 
-### 5.6 PDF export
+### 5.8 PDF export
 
 - **Paper size**: A5, A4, A3, Letter, Legal or Tabloid.
 - **Orientation**: Portrait or Landscape.
 
 These are the defaults for the export dialog. Whatever you pick in the dialog is also remembered here.
 
-### 5.7 About
+### 5.9 About
 
 The bottom of the page shows the plugin's version, and buttons to report a bug, request a feature, and visit the author's and Wolf 359 Press's websites. See [section 19](#19-getting-help).
 
@@ -398,6 +409,8 @@ The same panel can be added to any note with a code block:
 
 Below the panel are your collection's figures, read from your record notes. The dashboard redraws by itself shortly after a record note changes, is added, moved or removed, and when you change theme.
 
+The dashboard has fourteen sections, in this order. Turn any of them off in **Settings → Dashboard** (see [10.15](#1015-choosing-sections-and-colours)).
+
 ### 10.1 Overview
 
 A table with one row per base and a total, showing:
@@ -408,7 +421,12 @@ A table with one row per base and a total, showing:
 - **Lowest listings**: the cheapest copy on Discogs of each record, added up
 - **Highest**: the Mint price suggestions added up; for the total, Discogs' own collection maximum when suggestions are missing (marked \*)
 
-### 10.2 Value spread
+### 10.2 Growth over time
+
+- **Records owned**: how many records you owned at the end of each month, per base and in all, from each record's purchase date (or the date it was added to Discogs).
+- **Collection value (Discogs)**: Discogs' low, median and high value of your collection at each sync, one point per day. It starts with the first sync after you install version 0.12, and the chart appears once there are two syncs on different days.
+
+### 10.3 Value spread
 
 - **Whole collection**: Discogs' own low, medium and high value for your collection (fetched with each sync), and the sum of each record's G+, VG+ and NM price suggestions.
 - **A typical album, by format**: for each Discogs format in your collection (Vinyl, CD, Cassette…) and for all of them together: how many records, what the cheapest quarter are worth up to, the median record, where the top quarter starts, the most valuable record, and how much of the value sits in the 20 most valuable. A record's format is the first Discogs lists for it, skipping *Box Set* and *All Media*, which only wrap the discs inside: a box set of LPs counts as Vinyl.
@@ -418,26 +436,71 @@ A table with one row per base and a total, showing:
 
 These use the VG+ price suggestion when available, and the cheapest listing otherwise.
 
-### 10.3 What's in the collection
+### 10.4 Market
+
+- **Rarest**: your records with the fewest copies for sale on Discogs, the most valuable first where counts tie.
+- **In demand**: records whose cheapest copy on Discogs costs more than Discogs' VG+ price estimate, with how far above it is.
+- **Easiest to replace**: records with the most copies for sale.
+
+### 10.5 What's in the collection
 
 Doughnut charts of records per base and of the top ten genres, and a bar chart of the top 15 styles.
 
-### 10.4 By decade
+### 10.6 Pressings
+
+- **Country of release** and **Top labels**: your ten most common of each.
+- **Original releases and reissues**: a reissue is a copy released after the original year, or one Discogs describes as a reissue, repress or remaster.
+- **Albums and compilations**: from Discogs' description of each release.
+
+### 10.7 By decade
 
 Records per decade of original release, per base.
 
-### 10.5 Top artists
+### 10.8 Top artists
 
 Your 15 most-collected artists. Compilations credited to "Various" are left out.
 
-### 10.6 Buying
+### 10.9 Playing time
+
+- **Longest albums**: your ten longest, with track counts, from the tracklists.
+- **Hours of music by decade**: per base.
+
+### 10.10 Buying
 
 - **Records added per month**: the last 18 months, per base, using `purchased`, or the Discogs date added when `purchased` is empty.
 - **Latest additions, not listened to yet**: your 15 newest records you haven't marked as listened to. Tick **Listened** to mark one; its note gets `listened: true` and today's date in `listened_on`, and it leaves the list.
 
-### 10.7 Colours
+### 10.11 Spending
 
-The dashboard uses your Obsidian theme's colours. Each base gets its own shade, and charts with many parts use shades that alternate from strong to faint so that neighbours stand apart. With a single-colour theme, the labels and percentages identify each part.
+Uses the `price_paid_sek` property, which you fill in yourself. Until a record has one, the section says so.
+
+- **What you paid and what it's worth**: the total paid, and for records with a value, what they cost against what they're worth now and the gain or loss.
+- **Best gains**: the ten records whose value has grown most over what you paid.
+- **Spent per year**: from the purchase dates.
+
+### 10.12 Listening
+
+- **Listened so far**: per base and in all, from the Listened ticks.
+- **Listened per month**: the last twelve months, from `listened_on`.
+- **Waiting longest**: the records you've owned longest without listening to them, with a Listened box.
+
+### 10.13 Condition
+
+Media and sleeve conditions, best grade first. Conditions are copied from your Discogs collection when a record is first synced, so grade copies on Discogs before syncing them, or fill in `media_condition` and `sleeve_condition` in the note. Until any record is graded, the section says so.
+
+### 10.14 Needs attention
+
+What's missing from your record notes: purchase dates, shops, original years, prices, covers and genres, with how many records lack each and the first few of them (click one to open its note).
+
+### 10.15 Choosing sections and colours
+
+- **Sections**: **Settings → Dashboard** has a switch for each section. Sections that are off are left out of the dashboard and its PDF.
+- **Colours**: **Settings → Colours → Chart colours**:
+  - **Theme** (the default): shades of your theme's own colours.
+  - **Full colour**: the plugin's original purple, pink and orange.
+  - **Custom**: a colour picker for each base, and an **Accent** colour that the charts with many parts (genres, styles, artists, labels, countries) and the value scales start from.
+
+  In every mode, text, lines and backgrounds follow your theme, so everything stays readable. With a single-colour theme and **Theme** colours, the labels and percentages identify each part.
 
 ## 11. The Music Library
 
@@ -506,7 +569,7 @@ The library folder is `Music` unless you change it in settings.
 | What | Where |
 |---|---|
 | The Music view, its Dashboard and Library tabs, charts and layout | The plugin's code |
-| Settings (including the library folder), bases, the last run, the collection value, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
+| Settings (including the library folder, dashboard sections and colours), bases, the last run, the collection value and its history, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
 | Discogs and Genius tokens | Obsidian's local storage for this vault on this device |
 
 ## 15. Upgrading from an earlier version

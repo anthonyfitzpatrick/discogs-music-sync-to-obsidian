@@ -338,3 +338,24 @@ test("Discogs' collection value is decoded into the plugin's settings, not a fil
   const none = await eng.collectionValue();
   assert.deepStrictEqual([none.min, none.med, none.max], [null, null, null]);
 });
+
+test("each value refresh adds to the value history, one entry per day", async () => {
+  const { p } = await makePlugin(THREE());
+  p.saveToken("discogs", "t");
+  network = async () => ({ status: 200, json: { minimum: "SEK100.00", median: "SEK200.00", maximum: "SEK300.00" } });
+  await p.run("dashboard");
+  network = async () => ({ status: 200, json: { minimum: "SEK110.00", median: "SEK210.00", maximum: "SEK310.00" } });
+  await p.run("dashboard");
+  assert.strictEqual(p.data.valueHistory.length, 1, "the same day replaces its entry");
+  assert.deepStrictEqual([p.data.valueHistory[0].min, p.data.valueHistory[0].med, p.data.valueHistory[0].max], [110, 210, 310]);
+  assert.match(p.data.valueHistory[0].date, /^\d{4}-\d\d-\d\d$/);
+});
+
+test("the dashboard gets the sections, colours and history from settings, colours following bases by id", async () => {
+  const { p } = await makePlugin({ ...THREE(), sections: { market: false }, colours: { mode: "custom", bases: { cds: "#123456" }, accent: "#00aa55" } });
+  const o = p.reportOptions();
+  assert.deepStrictEqual(o.sections, { market: false });
+  assert.deepStrictEqual(o.colours, { mode: "custom", accent: "#00aa55", bases: [undefined, "#123456", undefined] });
+  p.data.libraries[1].name = "Compact discs";
+  assert.strictEqual(p.reportOptions().colours.bases[1], "#123456", "renaming a base keeps its colour");
+});

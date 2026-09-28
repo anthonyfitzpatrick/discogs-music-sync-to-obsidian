@@ -10,14 +10,14 @@ const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Se
 const DEFAULT_FOLDER = "Music";
 // A folder path as typed, cleaned: no leading/trailing slashes, single slashes, no empty parts.
 const cleanFolder = (v) => String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
-const VERSION = "0.11.6";
+const VERSION = "0.12.0";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
 // Decoders for Discogs responses, applied where the responses arrive.
 const { decodeCollectionPage, decodeIdentity } = require("./discogs.js");
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
-const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport } = require("./report.js");
+const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, SECTIONS, COLOUR_MODES, FULL_BASES, DEFAULT_ACCENT } = require("./report.js");
 // The plugin's own view — the Dashboard and Library tabs — in place of a dashboard note and .base files.
 const { MusicView, MUSIC_VIEW, OLD_VIEWS } = require("./views.js");
 
@@ -30,7 +30,10 @@ const DEFAULTS = { last: null, username: "", folder: DEFAULT_FOLDER, lyrics: tru
   value: null,                                   // Discogs' own value of the collection, fetched with each sync
   tab: "dashboard",                              // the Music tab shown last: dashboard or library
   library: { base: "", view: "gallery", size: "small", sort: "", search: "" },   // the Library's last choices
-  legacyFiles: [] };                             // files earlier versions made, offered for removal in settings
+  legacyFiles: [],                               // files earlier versions made, offered for removal in settings
+  valueHistory: [],                              // Discogs' value of the collection, one entry per day it was fetched
+  sections: {},                                  // dashboard sections turned off: { key: false }
+  colours: { mode: "theme", bases: {}, accent: DEFAULT_ACCENT } };   // bases: colour per base id, for Custom
 // Files versions before 0.11 kept in the vault, which the plugin no longer uses. Those versions always
 // used a folder called Music, so only there. Offered for removal in settings, never removed without
 // asking; in any other vault they simply aren't found. (Each base's .base file is added on loading.)
@@ -467,6 +470,8 @@ class MusicLibrarySync extends Plugin {
     // Before 0.11 each base had a .base file. The views replace them; the files are offered for removal.
     for (const lib of this.data.libraries) if (lib.base) { if (!this.data.legacyFiles.includes(lib.base)) this.data.legacyFiles.push(lib.base); delete lib.base; }
     this.data.library = Object.assign(structuredClone(DEFAULTS.library), this.data.library);
+    this.data.colours = Object.assign(structuredClone(DEFAULTS.colours), this.data.colours);
+    if (!this.data.colours.bases || Array.isArray(this.data.colours.bases)) this.data.colours.bases = {};
     await this.importTokenFiles();
     this.state = { running: false, mode: null, steps: {}, now: "", log: "", progress: 0 };
     this.panels = new Set();
@@ -508,6 +513,12 @@ class MusicLibrarySync extends Plugin {
     for (const leaf of this.musicLeaves()) leaf.view?.render?.().catch?.((e) => console.error(e));
   }
   baseNames() { return this.data.libraries.map((l) => l.name); }
+  // What the dashboard and PDF need besides the records: sections on or off, colours, value history.
+  reportOptions() {
+    const c = this.data.colours;
+    return { sections: this.data.sections, history: this.data.valueHistory,
+      colours: { mode: c.mode, accent: c.accent, bases: this.data.libraries.map((l) => c.bases[l.id]) } };
+  }
   collectionValue() { return decodeCollectionValue(this.data.value && { discogs_value_min: this.data.value.min, discogs_value_median: this.data.value.med, discogs_value_max: this.data.value.max }); }
   // A record's cover image, found the way Obsidian resolves the note's link to it.
   coverFile(record) { return record.cover ? this.app.metadataCache.getFirstLinkpathDest(record.cover, record.path) : null; }
@@ -688,7 +699,7 @@ class MusicLibrarySync extends Plugin {
       const value = this.collectionValue();
       const theme = this.themeForReport();
       const stamp = moment().format("D MMMM YYYY, HH:mm");
-      const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp);
+      const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp, this.reportOptions());
       const tmp = path.join(os.tmpdir(), `music-dashboard-export-${Date.now()}.html`);
       fs.writeFileSync(tmp, html, "utf8");
       const [w, h] = PAPER[size] || PAPER.A4;
@@ -810,7 +821,16 @@ class MusicLibrarySync extends Plugin {
         } catch (e) { failed = true; s.steps[st.id] = "error"; log(`ERROR (${st.name}): ${e.message}`); console.error(e); }
       }
       s.steps.dashboard = "active"; s.progress = steps.length / work; this.refresh();
-      try { this.data.value = await eng.collectionValue(); s.steps.dashboard = "done"; }
+      try {
+        this.data.value = await eng.collectionValue();
+        // one entry per day, for the value-over-time chart; a later fetch the same day replaces it
+        if (this.data.value.med !== null) {
+          const h = this.data.valueHistory.filter((e) => e.date !== this.data.value.checked);
+          h.push({ date: this.data.value.checked, min: this.data.value.min, med: this.data.value.med, max: this.data.value.max });
+          this.data.valueHistory = h.sort((a, b) => a.date.localeCompare(b.date)).slice(-1000);
+        }
+        s.steps.dashboard = "done";
+      }
       catch (e) { failed = true; s.steps.dashboard = "error"; log(`ERROR (collection value): ${e.message}`); console.error(e); }
       this.redrawViews();
     } catch (e) { failed = true; log(`ERROR: ${e.message}`); console.error(e); }
@@ -1026,6 +1046,29 @@ class MusicSettingTab extends PluginSettingTab {
       new Setting(el).addButton((b) => b.setButtonText("Move to trash").setWarning().onClick(() => new ConfirmModal(this.app, "Move these files to the trash?",
         `${legacy.join(", ")}. They go to your system trash, so you can get them back.`, "Move to trash",
         async () => { await P.trashLegacyFiles(legacy); new Notice("Moved to the trash"); redraw(); }).open()));
+    }
+
+    new Setting(el).setName("Dashboard").setHeading();
+    el.createEl("p", { cls: "setting-item-description", text: "Choose the sections the dashboard and its PDF show." });
+    for (const [key, label] of SECTIONS) new Setting(el).setName(label)
+      .addToggle((t) => t.setValue(d.sections[key] !== false).onChange(async (x) => {
+        if (x) delete d.sections[key]; else d.sections[key] = false;
+        await P.save(); P.redrawViews();
+      }));
+
+    new Setting(el).setName("Colours").setHeading();
+    new Setting(el).setName("Chart colours")
+      .setDesc("Theme uses shades of your theme's colours. Full colour is the plugin's original purple, pink and orange. Custom lets you choose. Text, lines and backgrounds always follow your theme.")
+      .addDropdown((dd) => {
+        for (const [k, v] of Object.entries(COLOUR_MODES)) dd.addOption(k, v);
+        dd.setValue(d.colours.mode).onChange(async (x) => { d.colours.mode = x; await P.save(); P.redrawViews(); redraw(); });
+      });
+    if (d.colours.mode === "custom") {
+      d.libraries.forEach((lib, i) => new Setting(el).setName(lib.name).setDesc("This base's colour in every chart and label.")
+        .addColorPicker((cp) => cp.setValue(d.colours.bases[lib.id] || FULL_BASES[i % FULL_BASES.length])
+          .onChange(async (x) => { d.colours.bases[lib.id] = x; await P.save(); P.redrawViews(); })));
+      new Setting(el).setName("Accent").setDesc("The starting colour for charts with many parts (genres, styles, artists, labels) and for value scales.")
+        .addColorPicker((cp) => cp.setValue(d.colours.accent || DEFAULT_ACCENT).onChange(async (x) => { d.colours.accent = x; await P.save(); P.redrawViews(); }));
     }
 
     new Setting(el).setName("Sync").setHeading();
