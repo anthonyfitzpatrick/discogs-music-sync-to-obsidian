@@ -22,7 +22,7 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "0.14.3";
+const VERSION = "0.15.0";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat } from "./bases.js";
@@ -589,18 +589,20 @@ class MusicLibrarySync extends Plugin {
 
   // Why a proposed name (and its formats) can't be used, or "" when it can. `self` is the library
   // being edited, so it doesn't clash with itself. No two bases may share a name, ignoring case and spacing.
-  async checkLibrary(v, self = null) {
+  // `adopt` lets a base named after its Discogs format take over an existing folder of that name: after
+  // Start again, or a reinstall, the notes are already there and the sync finds them.
+  async checkLibrary(v, self = null, adopt = false) {
     const problem = nameProblem(v, this.data.libraries.filter((l) => l !== self), !!self);
     if (problem) return problem;
     const name = tidy(v.name);
     const fs = this.app.vault.adapter;
-    if (!self && (await fs.exists(`${this.data.folder}/${name}`))) return `${this.data.folder} already has a folder called “${name}”.`;
+    if (!self && !adopt && (await fs.exists(`${this.data.folder}/${name}`))) return `${this.data.folder} already has a folder called “${name}”.`;
     return "";
   }
 
-  // Creates the base's folder and starts syncing it.
-  async addLibrary(v) {
-    const err = await this.checkLibrary(v); if (err) throw new Error(err);
+  // Creates the base's folder (or adopts it, see checkLibrary) and starts syncing it.
+  async addLibrary(v, adopt = false) {
+    const err = await this.checkLibrary(v, null, adopt); if (err) throw new Error(err);
     const name = tidy(v.name), s = slug(name);
     let id = s, n = 2; while (this.data.libraries.some((l) => l.id === id)) id = `${s}-${n++}`;
     const lib = { id, name, formats: [...v.formats], dir: `${this.data.folder}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3" };
@@ -634,9 +636,9 @@ class MusicLibrarySync extends Plugin {
     const added = [], skipped = [];
     for (const f of formats) {
       const v = { name: f, formats: [f], icon: guessIcon(f) };
-      const err = await this.checkLibrary(v);
+      const err = await this.checkLibrary(v, null, true);
       if (err) { skipped.push(`${f}: ${err}`); continue; }
-      added.push(await this.addLibrary(v));
+      added.push(await this.addLibrary(v, true));
     }
     return { added, skipped };
   }
@@ -661,7 +663,28 @@ class MusicLibrarySync extends Plugin {
 
   /* ---- Discogs / Genius helpers for the settings page ---- */
   token(kind) { return String(this.app.secretStorage.getSecret(TOKEN_KEYS[kind]) ?? ""); }
-  saveToken(kind, value) { this.app.secretStorage.setSecret(TOKEN_KEYS[kind], value.trim()); this.formatCache = null; }
+  saveToken(kind, value) {
+    if (!value.trim()) { this.forgetToken(kind); return; }
+    this.app.secretStorage.setSecret(TOKEN_KEYS[kind], value.trim()); this.formatCache = null;
+  }
+  // Removes the token from this vault's keychain. Obsidian's published API can't delete a secret yet, but
+  // its keychain can; where it can't, the secret is emptied, which the plugin reads as no token.
+  forgetToken(kind) {
+    const store = this.app.secretStorage;
+    if ("deleteSecret" in store) store.deleteSecret(TOKEN_KEYS[kind]); else store.setSecret(TOKEN_KEYS[kind], "");
+    this.formatCache = null;
+  }
+  // Back to how a new install starts: tokens removed, username, bases and every setting reset. Record notes,
+  // covers and PDFs stay in the vault, and the next sync finds them again (bases adopt their old folders).
+  async startAgain() {
+    for (const kind of Object.keys(TOKEN_KEYS)) this.forgetToken(kind);
+    const library = this.data.library;                          // the open Library view holds on to this one
+    for (const k of Object.keys(this.data)) delete this.data[k];
+    Object.assign(this.data, structuredClone(DEFAULTS), { libraries: [] });
+    this.data.library = Object.assign(library, structuredClone(DEFAULTS.library));
+    await this.save();
+    this.redrawViews();
+  }
   // Tokens kept in local storage by 0.11 and 0.12 move to secret storage, and leave local storage. Tokens
   // kept in files by earlier versions are read in once; the files are then offered for removal.
   async importTokenFiles() {
@@ -1128,6 +1151,13 @@ class MusicSettingTab extends PluginSettingTab {
         { name: "Paper size", control: { type: "dropdown", key: "pdfSize", options: Object.fromEntries(Object.keys(PAPER).map((k) => [k, `${k} (${PAPER[k][0]} × ${PAPER[k][1]} in)`])) } },
         { name: "Orientation", control: { type: "dropdown", key: "pdfOrientation", options: { portrait: "Portrait", landscape: "Landscape" } } },
       ] },
+      { type: "group", heading: "Reset", items: [
+        { name: "Start again", aliases: ["Reset", "Remove tokens", "Uninstall"],
+          desc: "Removes your Discogs and Genius tokens from this vault, and sets the username, bases and every setting back to how a new install starts. Your record notes, covers and PDFs stay in the vault; the next sync finds them again. Do this before uninstalling to leave no tokens behind.",
+          render: (s) => s.addButton((b) => b.setButtonText("Start again").setWarning().onClick(() => new ConfirmModal(this.app, "Start again?",
+            "Your tokens are removed from this vault, and the username, bases, dashboard sections, colours and PDF settings go back to how a new install starts. Your record notes, covers and PDFs stay in the vault.",
+            "Start again", async () => { await P.startAgain(); this.tokenStatus = {}; redraw(); new Notice("Started again: tokens removed and settings reset"); }).open())) },
+      ] },
       // The About block is not a setting: kept out of search, it takes over its row.
       { name: "About Discogs music sync and dashboard", searchable: false, render: (s) => {
         s.settingEl.empty(); s.settingEl.addClass("mls-about-row");
@@ -1229,13 +1259,14 @@ class MusicSettingTab extends PluginSettingTab {
     };
     const kept = this.tokenStatus[kind];
     if (kept) show(kept.text, kept.state); else show(P.token(kind) ? "A token is saved on this device." : "No token saved yet.");
-    let input, button, run = 0;
+    let input, button, remove, run = 0;
     const save = () => {
       const typed = input.getValue().trim();
       if (!typed) return false;
       P.saveToken(kind, typed); input.setValue(""); input.setPlaceholder("Paste to replace");
       run++;                                                   // any check still running was for the old token
       button.setDisabled(false).setButtonText("Test");
+      remove.setDisabled(false);
       show("Saved on this device. Press Test to check it.");
       this.refreshStarted();
       return true;
@@ -1263,6 +1294,17 @@ class MusicSettingTab extends PluginSettingTab {
       t.inputEl.addEventListener("change", save);
     });
     s.addButton((b) => { button = b; b.setButtonText("Test").onClick(() => void check()); });
+    // Removes the saved token from this vault's keychain; pasting a token again puts it back.
+    s.addExtraButton((b) => {
+      remove = b;
+      b.setIcon("trash-2").setTooltip(`Remove the saved ${service} token from this vault`).setDisabled(!P.token(kind)).onClick(() => {
+        if (!P.token(kind)) return;
+        P.forgetToken(kind); run++;
+        b.setDisabled(true); button.setDisabled(false).setButtonText("Test"); input.setPlaceholder("Paste token here");
+        show("Removed from this vault. No token saved.");
+        this.refreshStarted();
+      });
+    });
   }
 
   // The About / Support footer shared with the other Wolf 359 Press plugins.

@@ -147,6 +147,7 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 - **Library folder**: the folder new bases get their folders in, and where removed records and PDF exports go. It is `Music` unless you change it, and can be anywhere in your vault, such as `Collections/Records`. Bases you already have keep their folders. A name Obsidian can't use (one starting with a dot, or containing `\ : * ? " < > | # ^ [ ]`) is shown in red under the field and isn't saved.
 - **Username**: the Discogs account whose collection is synced.
 - **Personal access token**: paste your token into the field. It is saved on this device at once and the field empties; "Saved on this device. Press Test to check it." appears under it. (A typed token is saved when you press Enter or leave the field.) The field is masked. Paste a new token at any time to replace it.
+- **Remove** (the bin beside Test): removes the saved token from this vault. Paste a token again to put it back.
 - **Test**: checks the saved token with Discogs, and the answer appears under the field. If there is still a token in the field, Test saves it first, so one press is enough.
   - "✓ Connected to Discogs as *name*" means everything is fine.
   - "✗ The token belongs to *X*, but the username above is *Y*" means the token and username don't match. Syncing uses the username, so fix whichever is wrong.
@@ -198,7 +199,11 @@ Text, lines and backgrounds always follow your theme.
 
 These are the defaults for the export dialog. Whatever you pick in the dialog is also remembered here.
 
-### 5.9 About
+### 5.9 Reset
+
+- **Start again**: after asking, removes your Discogs and Genius tokens from this vault and sets the username, bases and every setting back to how a new install starts. Your record notes, covers and PDFs stay in the vault. The next sync creates the bases again, takes over their old folders and finds the notes already there, so nothing is duplicated. Use it before uninstalling the plugin to leave no tokens behind.
+
+### 5.10 About
 
 The bottom of the page shows the plugin's version, and buttons to report a bug, request a feature, and visit the author's and Wolf 359 Press's websites. See [section 19](#19-getting-help).
 
@@ -589,7 +594,7 @@ Your bases and settings carry over. The old files are left alone until you choos
 
 - The plugin connects only to `api.discogs.com` and `api.genius.com`, and only when you sync, refresh prices or the collection value, set up or edit bases, or test a token. There is no telemetry.
 - Genius is sent only artist and track names.
-- Tokens are kept in Obsidian's secret storage on this device, which the operating system encrypts; they appear under Settings → Keychain. Tokens saved by versions 0.11 and 0.12 move there on their own the first time 0.13 loads. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
+- Tokens are kept in Obsidian's keychain for this vault, on this device. Despite the name it isn't Apple's: Obsidian encrypts it with macOS Keychain, Windows' own data protection or the Linux desktop's password store, whichever the computer has, and lists it under Settings → Keychain. Each vault has its own, so a token entered in one vault isn't seen in another. Uninstalling the plugin doesn't remove it: use **Remove** or **Start again** first, or delete the `music-library-sync-…-token` entries under Settings → Keychain. Tokens saved by versions 0.11 and 0.12 move there on their own the first time 0.13 loads. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
 - If a token has ever been exposed, revoke it on Discogs or Genius, create a new one and paste it into settings.
 
 ## 17. Troubleshooting

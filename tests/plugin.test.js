@@ -72,7 +72,8 @@ function makeVault(entries = {}) {
     metadataCache: { on: () => ({}) },
     loadLocalStorage: (k) => local.get(k) ?? null,
     saveLocalStorage: (k, v) => { if (v === null) local.delete(k); else local.set(k, v); },
-    secretStorage: { getSecret: (k) => secrets.get(k) ?? null, setSecret: (k, v) => { if (!/^[a-z0-9-]+$/.test(k)) throw new Error("bad id"); secrets.set(k, v); } },
+    secretStorage: { getSecret: (k) => secrets.get(k) ?? null, setSecret: (k, v) => { if (!/^[a-z0-9-]+$/.test(k)) throw new Error("bad id"); secrets.set(k, v); },
+      deleteSecret: (k) => secrets.delete(k) },
   };
   return { app, files, calls, local, secrets, text: (p) => files.get(p.toLowerCase())?.text };
 }
@@ -288,6 +289,47 @@ test("a sync on a new install creates a base for each format and fills it; one t
   await sync();
   assert.ok(!p.data.libraries.some((l) => l.name === "CD"), "with the setting off, no base is created");
   assert.ok(app.vault.getAbstractFileByPath("Music/Vinyl"));
+});
+
+test("a token can be removed from the vault's keychain", async () => {
+  const { p, secrets } = await makePlugin(undefined);
+  p.saveToken("discogs", "abc"); p.saveToken("genius", "def");
+  p.forgetToken("discogs");
+  assert.strictEqual(p.token("discogs"), "");
+  assert.ok(!secrets.has("music-library-sync-discogs-token"), "deleted, not left behind empty");
+  assert.strictEqual(p.token("genius"), "def", "the other token stays");
+  p.saveToken("genius", "  ");
+  assert.ok(!secrets.has("music-library-sync-genius-token"), "saving an empty token removes it");
+});
+
+test("Start again removes the tokens and resets every setting, keeping the notes; the next sync finds them", async () => {
+  const v = await makePlugin({ username: "someone", folder: "Records", autoBases: false, skippedFormats: ["CD"], sections: { market: false },
+    libraries: [{ id: "vinyl", name: "Vinyl", formats: ["Vinyl"], dir: "Music/Vinyl", tag: "vinyl-library", icon: "disc-3" }] },
+  { "Music/Vinyl": null, "Music/Vinyl/Kept.md": noteFor(1, "vinyl-library", "My notes.") });
+  const { p, secrets } = v;
+  p.saveToken("discogs", "abc"); p.saveToken("genius", "def");
+  const libraryState = p.data.library;
+  await p.startAgain();
+  assert.strictEqual(secrets.size, 0, "no token left in the vault's keychain");
+  assert.strictEqual(p.data.username, "");
+  assert.deepStrictEqual(p.data.libraries, []);
+  assert.deepStrictEqual(p.data.skippedFormats, []);
+  assert.deepStrictEqual(p.data.sections, {});
+  assert.strictEqual(p.data.folder, "Music");
+  assert.strictEqual(p.data.autoBases, true);
+  assert.strictEqual(p.data.library, libraryState, "the open Library view keeps its state object");
+  assert.match(v.text("Music/Vinyl/Kept.md"), /My notes\./, "notes stay");
+
+  p.data.username = "someone";
+  const { eng } = makeEngine(v, [], [item(1, ["Vinyl"])]);
+  eng.cfg.createBases = (items) => p.createBasesFor(items);
+  assert.strictEqual(await eng.syncAll(), 0, "the old note is found: no duplicate");
+  assert.deepStrictEqual(p.data.libraries.map((l) => l.dir), ["Music/Vinyl"], "the base adopts its old folder");
+});
+
+test("a base added by hand still can't take over an existing folder", async () => {
+  const { p } = await makePlugin({ username: "someone" }, { "Music/Vinyl": null, "Music/Vinyl/Kept.md": "x" });
+  await assert.rejects(p.addLibrary({ name: "Vinyl", formats: ["Vinyl"] }), /already has a folder called “Vinyl”/);
 });
 
 test("adding a base by hand for a left-out format brings it back into the sync", async () => {
