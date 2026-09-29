@@ -22,7 +22,7 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "0.14.1";
+const VERSION = "0.14.2";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat } from "./bases.js";
@@ -34,6 +34,20 @@ import { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, SECTIO
 import { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote } from "./views.js";
 
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
+// Where each service issues tokens, and the steps, shown under each token field in settings.
+const TOKEN_HELP = {
+  discogs: { url: "https://www.discogs.com/settings/developers", link: "discogs.com/settings/developers",
+    steps: ["Sign in to Discogs, then open the link above: it goes straight to Settings → Developers.",
+      "Press “Generate new token”.",
+      "Copy the token and paste it into the field here. It is checked with Discogs straight away."],
+    note: "The token lets the plugin read your collection and prices. Treat it like a password." },
+  genius: { url: "https://genius.com/api-clients", link: "genius.com/api-clients",
+    steps: ["Sign in to Genius, then open the link above: it goes straight to your API clients.",
+      "Press “New API Client”. Any app name and website address will do, such as “Obsidian” and https://obsidian.md.",
+      "Save it, then press “Generate Access Token” under the new client.",
+      "Copy the token and paste it into the field here. It is checked with Genius straight away."],
+    note: "The token is only used to look up lyrics pages. Treat it like a password." },
+};
 
 // A "base" (library) takes the records of one or more Discogs formats into its own vault folder, with
 // its own tag, and its own place in the Library and Dashboard views. A new install starts with none and
@@ -1043,7 +1057,7 @@ class MusicSettingTab extends PluginSettingTab {
         { name: "Library folder", desc: "Where new bases get their folders, and where removed records and PDF exports go. Existing bases keep their folders.",
           control: { type: "text", key: "folder", placeholder: DEFAULT_FOLDER, validate: folderProblem } },
         { name: "Username", desc: "The Discogs account whose collection is synced.", control: { type: "text", key: "username", placeholder: "Discogs username" } },
-        { name: "Personal access token", aliases: ["Discogs token"], desc: "Required. Create one at discogs.com → Settings → Developers.",
+        { name: "Personal access token", aliases: ["Discogs token", "Developers"], desc: "Required. Lets the plugin read your Discogs collection.",
           render: (s) => this.tokenRow(s, "discogs", "Discogs", async () => {
             const who = await P.discogsIdentity();
             if (!d.username) { d.username = who; await P.save(); }          // shown when the check redraws the tab
@@ -1053,7 +1067,7 @@ class MusicSettingTab extends PluginSettingTab {
       ] },
       { type: "group", heading: "Lyrics", items: [
         { name: "Add Genius lyrics links", desc: "Look up each track on Genius when a record is added. Needs a Genius token.", control: { type: "toggle", key: "lyrics" } },
-        { name: "Genius access token", desc: "Optional. Create a client at genius.com/api-clients and generate an access token.",
+        { name: "Genius access token", aliases: ["API client"], desc: "Optional. Needed for lyrics links.",
           render: (s) => this.tokenRow(s, "genius", "Genius", async () => { await P.geniusCheck(); return "Genius accepted the token"; }) },
       ] },
       { type: "group", heading: "Bases", items: [
@@ -1188,7 +1202,16 @@ class MusicSettingTab extends PluginSettingTab {
   // Test, which also checks a token already saved. The answer shows under the field, and is kept when
   // the tab redraws.
   tokenRow(s, kind, service, test) {
-    const P = this.plugin;
+    const P = this.plugin, help = TOKEN_HELP[kind];
+    // the description with a link to where the token is made, and the steps, folded away until wanted
+    const desc = s.descEl.createDiv({ cls: "mls-token-link" });
+    desc.appendText("Get one at ");
+    desc.createEl("a", { text: help.link, href: help.url, attr: { target: "_blank", rel: "noopener" } });
+    const how = s.descEl.createEl("details", { cls: "mls-token-help" });
+    how.createEl("summary", { text: "How to get a token" });
+    const steps = how.createEl("ol");
+    for (const step of help.steps) steps.createEl("li", { text: step });
+    how.createDiv({ cls: "mls-token-note", text: help.note });
     const status = s.descEl.createDiv({ cls: "mls-token-status" });
     const show = (text, state = "") => {
       this.tokenStatus[kind] = { text, state };

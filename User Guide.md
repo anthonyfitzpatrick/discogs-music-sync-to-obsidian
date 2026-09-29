@@ -91,17 +91,20 @@ BRAT checks for new releases when Obsidian starts.
 
 ### 4.1 Get a Discogs token
 
-1. Sign in at [discogs.com](https://www.discogs.com).
-2. Go to **Settings → Developers**.
-3. Press **Generate new token** and copy it.
+1. Sign in at [discogs.com](https://www.discogs.com) and open [discogs.com/settings/developers](https://www.discogs.com/settings/developers) (Settings → Developers).
+2. Press **Generate new token** and copy it.
+
+The plugin's settings link to the same page, under the token field, with these steps under **How to get a token**.
 
 The token gives read access to your account. Treat it like a password.
 
 ### 4.2 Get a Genius token (optional)
 
 1. Sign in at [genius.com](https://genius.com) and open [genius.com/api-clients](https://genius.com/api-clients).
-2. Create an API client. Any name and website address will do.
-3. Press **Generate Access Token** and copy the token.
+2. Press **New API Client**. Any app name and website address will do, such as "Obsidian" and `https://obsidian.md`. Save it.
+3. Press **Generate Access Token** under the new client and copy the token.
+
+The plugin's settings link to the same page, under the Genius token field, with these steps.
 
 ### 4.3 Enter them in Obsidian
 

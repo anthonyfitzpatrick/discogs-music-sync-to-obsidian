@@ -361,3 +361,8 @@
 /* The answer under a token field: saved, checking, accepted or refused. */
 .mls-token-status.is-ok { color: var(--text-success); }
 .mls-token-status.is-error { color: var(--text-error); }
+.mls-token-link { margin-top: 2px; }
+.mls-token-help { margin: 4px 0; }
+.mls-token-help summary { cursor: pointer; color: var(--text-accent); }
+.mls-token-help ol { margin: 4px 0; padding-left: 1.4em; }
+.mls-token-note { color: var(--text-faint); }
