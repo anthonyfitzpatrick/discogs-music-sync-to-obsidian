@@ -2,15 +2,21 @@
 
 An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, with a Music Dashboard and a Music Library built in. It needs no other plugin, and puts nothing in your vault except your record notes, their images and the PDFs you export.
 
-The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its folder in `.obsidian/plugins/`, is `music-library-sync`.
+The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its folder in `.obsidian/plugins/`, is `discogs-music-sync`.
+
+![The dashboard: overview, value spread and the most valuable albums](docs/images/dashboard.png)
+
+![The Library tab: a gallery of covers, with base, view, size and sort](docs/images/library.jpg)
 
 ## Features
 
-- **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in SEK.
+- **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in your currency.
 - **Genius lyrics links.** Each track links to its lyrics on Genius where a match is found.
 - **Bases, sorted by format.** The first sync creates a base for each format in your collection (Vinyl, CD, Cassette…), each with its own folder and tag, and later syncs do the same for new formats. Every record goes to the base for its format, from anywhere in your Discogs collection: you don't need to file records into folders on Discogs, and formats are Discogs' own names, never typed. You can rename, merge or stop syncing bases.
 - **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to a *Removed from collection* folder, never deleted.
+- **Your currency.** Prices, values and charts in any currency Discogs prices in, starting from your Discogs account's.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
+- **Update a record.** Brings one note up to date with Discogs (conditions graded later, corrected details, lyrics links) without touching what you wrote.
 - **One Music view, two tabs.** The disc icon opens the plugin's own view, with the sync panel at the top and a Dashboard tab and a Library tab.
 - **Dashboard.** Thirteen sections, drawn by the plugin: overview, growth over time (records owned and the collection's value), value spread with a typical album per format, the market (rarest, in demand, easiest to replace), what's in the collection, pressings (countries, labels, reissues, compilations), decades, top artists, playing time, buying, listening, condition and what needs filling in. Turn any section off in settings. Albums open their notes.
 - **Colours.** Charts follow your theme, or use the original full colours, or colours you choose for each base.
@@ -29,7 +35,7 @@ No other plugin is needed.
 
 ## Installation
 
-**From a release.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian/releases/latest), put them in `<your vault>/.obsidian/plugins/music-library-sync/`, then enable **Discogs music sync and dashboard** in **Settings → Community plugins**.
+**From a release.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian/releases/latest), put them in `<your vault>/.obsidian/plugins/discogs-music-sync/`, then enable **Discogs music sync and dashboard** in **Settings → Community plugins**.
 
 **With BRAT** (for beta testing). Install the BRAT community plugin, choose **Add beta plugin**, and enter `anthonyfitzpatrick/discogs-music-sync-to-obsidian`. BRAT installs the latest release and keeps it updated.
 
@@ -50,7 +56,7 @@ The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 
 ## Known limitations
 
-- Prices are in Swedish kronor (SEK).
+- Discogs gives price suggestions and the collection's value only in your Discogs account's currency. For another currency the plugin converts them at Discogs' own rate, measured from a record's cheapest listing in both currencies.
 - Discogs price suggestions (the Low, Mid, High and Mint estimates) only appear once your Discogs Seller Settings are filled in. Without them, the dashboard uses the cheapest current listing instead.
 - Renaming a base doesn't move its notes to a folder of the new name.
 - Tokens are kept per vault and per device: enter them in each vault, on each computer, where you sync.

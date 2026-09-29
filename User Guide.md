@@ -1,6 +1,6 @@
 # Discogs music sync and dashboard User Guide
 
-Discogs music sync and dashboard (repository: *Discogs Music Sync to Obsidian*, plugin ID `music-library-sync`) turns your Discogs collection into a music library inside your Obsidian vault. This guide explains how to set it up and how to use each part of it.
+Discogs music sync and dashboard (repository: *Discogs Music Sync to Obsidian*, plugin ID `discogs-music-sync`) turns your Discogs collection into a music library inside your Obsidian vault. This guide explains how to set it up and how to use each part of it.
 
 ## Contents
 
@@ -35,7 +35,7 @@ For every record in your Discogs collection, the plugin creates a note with:
 - label, catalogue number, country, format, release year and original release year,
 - genres and styles,
 - your media and sleeve condition, and your notes, from Discogs,
-- current Discogs prices in Swedish kronor.
+- current Discogs prices, in the currency you choose.
 
 Records are grouped into **bases** by their format, such as **Vinyl**, **CD** or **Cassette**, automatically, wherever they are in your Discogs collection. The plugin creates a base for each format it finds in your collection; nothing is set up in advance.
 
@@ -70,7 +70,7 @@ No other plugin is needed.
 ### 3.1 From a release
 
 1. Open the [latest release](https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian/releases/latest) and download `main.js`, `manifest.json` and `styles.css`.
-2. Create the folder `<your vault>/.obsidian/plugins/music-library-sync/` and put the three files in it.
+2. Create the folder `<your vault>/.obsidian/plugins/discogs-music-sync/` and put the three files in it.
 3. Open **Settings → Community plugins**. If Restricted mode is on, turn it off.
 4. Reload the list of installed plugins and turn on **Discogs music sync and dashboard**.
 
@@ -190,22 +190,26 @@ A switch for each of the dashboard's thirteen sections (see [section 10](#10-the
 
 Text, lines and backgrounds always follow your theme.
 
-### 5.7 Sync
+### 5.7 Prices
+
+- **Currency**: the currency prices, the collection's value and the dashboard's charts are in. It starts as your Discogs account's own currency, found when you press **Test** or at the first sync, and you can choose any currency Discogs prices in: US dollar, euro, pound sterling, Canadian, Australian and New Zealand dollar, Swiss franc, Swedish krona, Japanese yen, Mexican peso, Brazilian real and South African rand. After changing it, run **Refresh prices** (see [section 9](#9-prices)).
+
+### 5.8 Sync
 
 - **Download all images**: when on, every Discogs photo of a new record (back cover, labels, inserts) is saved and shown under **Images** in its note. When off, only the single front cover is downloaded, which makes syncing faster and uses less space.
 
-### 5.8 PDF export
+### 5.9 PDF export
 
 - **Paper size**: A5, A4, A3, Letter, Legal or Tabloid.
 - **Orientation**: Portrait or Landscape.
 
 These are the defaults for the export dialog. Whatever you pick in the dialog is also remembered here.
 
-### 5.9 Reset
+### 5.10 Reset
 
 - **Start again**: after asking, removes your Discogs and Genius tokens from this vault and sets the username, bases and every setting back to how a new install starts. Your record notes, covers and PDFs stay in the vault. The next sync creates the bases again, takes over their old folders and finds the notes already there, so nothing is duplicated. Use it before uninstalling the plugin to leave no tokens behind.
 
-### 5.10 About
+### 5.11 About
 
 The bottom of the page shows the plugin's version, and buttons to report a bug, request a feature, and visit the author's and Wolf 359 Press's websites. See [section 19](#19-getting-help).
 
@@ -366,7 +370,7 @@ Write anything you like under **Notes**, or anywhere else in the note. A sync ne
 |---|---|
 | `purchased` | Date you bought it. The dashboard's buying charts use this, falling back to `added_to_discogs`. |
 | `shop` | Where you bought it. Shown in the Library's Catalogue view, and searchable. |
-| `price_paid_sek` | What you paid, for your own records. Left empty for you to fill in; the dashboard doesn't use it. |
+| `price_paid` | What you paid, for your own records. Left empty for you to fill in; the dashboard doesn't use it. |
 | `listened` | Ticked for you when you tick the record on the dashboard's "not listened to yet" list, which also adds `listened_on`. |
 
 ### 8.3 Tracklist
@@ -376,26 +380,45 @@ Each row shows the position (A1, B2, 1…), title, length and a **Lyrics** link.
 - Track lengths come from the release. Where it has none, they are taken from the Discogs master release or its main release.
 - Headings (for example "Side A") and index tracks with sub-tracks are shown in bold.
 - A lyrics link is added only when Genius has a song whose title and artist match. Tracks credited to other artists are matched on their own artist, and cast recordings and soundtracks are matched on the album. Instrumentals and obscure tracks often have no link.
-- Lyrics are looked up only when the note is created. Turning lyrics on later doesn't add links to existing notes.
+- Lyrics are looked up when the note is created. To add links to a note made while lyrics were off, run **Update this record from Discogs** on it (see [8.5](#85-updating-a-record-from-discogs)).
 
 ### 8.4 Images
 
 Covers are saved in `<base folder>/covers/`, named after the Discogs release ID. Other photos are saved in `<base folder>/images/`, numbered `-01`, `-02` and so on. Images already on disk are never downloaded again.
 
+### 8.5 Updating a record from Discogs
+
+A sync never rewrites an existing note. To bring one record up to date with Discogs, open its note and run **Update this record from Discogs** from the command palette, or right-click the note (or use its ⋯ menu) and choose **Update from Discogs**. It is useful when you grade a copy on Discogs after syncing it, when Discogs corrects a release, or to add lyrics links to a note made while lyrics were off.
+
+It replaces:
+
+- the details from Discogs: artist, title, years, genres, styles, label, catalogue number, country, format, media and the Discogs link,
+- your media and sleeve condition and the date added, from your Discogs collection,
+- the prices, in your chosen currency,
+- the **Tracklist** section, with lyrics links if lyrics are on,
+- the cover, only if the note has none.
+
+It keeps everything else: `purchased`, `shop`, `price_paid`, `listened`, the tags, the **Notes** section and anything you've written outside the tracklist. A note from before version 0.16 also gets its price properties renamed (see [section 15](#15-upgrading-from-an-earlier-version)).
+
 ## 9. Prices
 
-All prices are in Swedish kronor, rounded to whole kronor.
+Prices are in the currency chosen in **Settings → Prices → Currency** (see [5.7](#57-prices)), rounded to whole units.
 
 | Property | Meaning |
 |---|---|
-| `market_lowest_sek` | The cheapest copy of this release currently for sale on Discogs |
+| `market_lowest` | The cheapest copy of this release currently for sale on Discogs |
 | `market_for_sale` | How many copies are for sale |
-| `price_low_sek` | Discogs' suggested price in Good Plus (G+) condition |
-| `price_mid_sek` | Suggested price in Very Good Plus (VG+) condition |
-| `price_high_sek` | Suggested price in Near Mint (NM or M-) condition |
-| `price_max_sek` | Suggested price in Mint (M) condition |
-| `price_my_copy_sek` | Suggested price for the condition you gave your copy |
+| `price_low` | Discogs' suggested price in Good Plus (G+) condition |
+| `price_mid` | Suggested price in Very Good Plus (VG+) condition |
+| `price_high` | Suggested price in Near Mint (NM or M-) condition |
+| `price_max` | Suggested price in Mint (M) condition |
+| `price_my_copy` | Suggested price for the condition you gave your copy |
+| `price_currency` | The currency these prices are in, for example `USD` |
 | `price_checked` | When the prices were last fetched |
+
+**How the currency works.** Discogs gives the cheapest listing in any currency, but its price suggestions and the value of your collection only in the currency set on your Discogs account. When you choose another, the plugin asks Discogs for the same record's cheapest listing in both currencies. The difference is Discogs' own exchange rate, which converts the suggestions and the collection value. The rate is measured once per sync, and kept for when no record has a listing. Each note records its currency in `price_currency`.
+
+**Changing the currency.** Notes keep the prices they have until you run **Refresh prices**, which fetches them again in the new currency. Until then, the dashboard leaves prices in the old currency out of its figures, rather than adding kronor to dollars, and lists those records under **Needs attention**. The value-over-time chart shows only values recorded in the chosen currency.
 
 **Price suggestions need Discogs Seller Settings.** Discogs only gives price suggestions to accounts whose Seller Settings are filled in (you don't have to sell anything). Until then, the suggestion fields stay empty, the log says "price suggestions need Discogs Seller Settings", and the dashboard values records by their cheapest listing instead.
 
@@ -495,7 +518,7 @@ Your 15 most-collected artists. Compilations credited to "Various" are left out.
 
 ### 10.12 Condition
 
-Media and sleeve conditions, best grade first. Conditions are copied from your Discogs collection when a record is first synced, so grade copies on Discogs before syncing them, or fill in `media_condition` and `sleeve_condition` in the note. Until any record is graded, the section says so.
+Media and sleeve conditions, best grade first. Conditions are copied from your Discogs collection when a record is first synced. If you grade a copy on Discogs later, run **Update this record from Discogs** on its note (see [8.5](#85-updating-a-record-from-discogs)), or fill in `media_condition` and `sleeve_condition` yourself. Until any record is graded, the section says so.
 
 ### 10.13 Needs attention
 
@@ -557,6 +580,7 @@ Run these from the command palette (Ctrl/Cmd+P). You can give any of them a hotk
 | Cancel running sync | Stops after the current record |
 | Export dashboard as PDF… | Opens the PDF export dialog |
 | Add a base… | Opens the Add base dialog |
+| Update this record from Discogs | Brings the open record note up to date with Discogs (see [8.5](#85-updating-a-record-from-discogs)). Also in a record note's right-click menu, as **Update from Discogs**. |
 
 The ribbon's **disc** icon opens **Music**, on the tab you used last.
 
@@ -578,7 +602,7 @@ The library folder is `Music` unless you change it in settings.
 | What | Where |
 |---|---|
 | The Music view, its Dashboard and Library tabs, charts and layout | The plugin's code |
-| Settings (including the library folder, dashboard sections and colours), bases, the last run, the collection value and its history, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
+| Settings (including the library folder, dashboard sections and colours), bases, the last run, the collection value and its history, the last tab and the Library's last choices | `.obsidian/plugins/discogs-music-sync/data.json` |
 | Discogs and Genius tokens | Obsidian's keychain for this vault on this device, encrypted by the operating system (Settings → Keychain) |
 
 ## 15. Upgrading from an earlier version
@@ -594,11 +618,16 @@ Earlier versions kept some things in your vault, always in `Music/`. From 0.11 t
 
 Your bases and settings carry over. The old files are left alone until you choose to remove them: **Settings → Files from earlier versions → Move to trash** (see [5.4](#54-files-from-earlier-versions)). If you had edited a `.base` file and want to keep it, leave it; Obsidian's Bases still opens it.
 
+### From 0.15 or earlier to 0.16
+
+- **The plugin's ID changed** from `music-library-sync` to `discogs-music-sync`, so its folder has a new name. Rename `.obsidian/plugins/music-library-sync` to `.obsidian/plugins/discogs-music-sync` with Obsidian closed (your settings, in `data.json`, move with it), then open Obsidian and turn the plugin on again under **Settings → Community plugins**. Your tokens move to the new names in the keychain by themselves. Hotkeys you gave the plugin's commands need setting again.
+- **Prices have a currency.** Installs from before 0.16 keep Swedish kronor until you choose another. The price properties lose their `_sek` ending (`price_mid_sek` becomes `price_mid`, `price_paid_sek` becomes `price_paid`) and gain `price_currency`. Old notes are still read correctly; each note is moved to the new names the next time **Refresh prices** or **Update this record from Discogs** runs on it, keeping what you paid.
+
 ## 16. Privacy and security
 
 - The plugin connects only to `api.discogs.com` and `api.genius.com`, and only when you sync, refresh prices or the collection value, set up or edit bases, or test a token. There is no telemetry.
 - Genius is sent only artist and track names.
-- Tokens are kept in Obsidian's keychain for this vault, on this device. Despite the name it isn't Apple's: Obsidian encrypts it with macOS Keychain, Windows' own data protection or the Linux desktop's password store, whichever the computer has, and lists it under Settings → Keychain. Each vault has its own, so a token entered in one vault isn't seen in another. Uninstalling the plugin doesn't remove it: use **Remove** or **Start again** first, or delete the `music-library-sync-…-token` entries under Settings → Keychain. Tokens saved by versions 0.11 and 0.12 move there on their own the first time 0.13 loads. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
+- Tokens are kept in Obsidian's keychain for this vault, on this device. Despite the name it isn't Apple's: Obsidian encrypts it with macOS Keychain, Windows' own data protection or the Linux desktop's password store, whichever the computer has, and lists it under Settings → Keychain. Each vault has its own, so a token entered in one vault isn't seen in another. Uninstalling the plugin doesn't remove it: use **Remove** or **Start again** first, or delete the `discogs-music-sync-…-token` entries under Settings → Keychain. Tokens saved by versions 0.11 and 0.12 move there on their own the first time 0.13 loads. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
 - If a token has ever been exposed, revoke it on Discogs or Genius, create a new one and paste it into settings.
 
 ## 17. Troubleshooting
@@ -623,6 +652,9 @@ The username is probably wrong. Check it, and press **Test** to see which accoun
 
 **"Discogs is busy (429) — waiting 15 s…"**
 Normal on big syncs. The plugin waits and carries on by itself.
+
+**"Prices in another currency than … (run Refresh prices)" under Needs attention**
+You changed the currency. Those records still have prices in the old one, which the dashboard leaves out. Run **Refresh prices**.
 
 **"price suggestions need Discogs Seller Settings — skipping"**
 See [section 9](#9-prices). Fill in your Discogs Seller Settings and run **Refresh prices**.
@@ -669,7 +701,7 @@ Yes, for example `CD`, `CDr` and `SACD` in one CDs base. Each format can belong 
 Either Discogs has no data for that release, nobody is selling it, or your Seller Settings aren't filled in (for the suggestion fields).
 
 **Can I change the currency?**
-Not yet. Prices are in Swedish kronor.
+Yes: **Settings → Prices → Currency**, then run **Refresh prices** (see [section 9](#9-prices)).
 
 **Does it work on mobile?**
 No. The plugin is desktop only.
