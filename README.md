@@ -8,13 +8,6 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 
 ![The Library tab: a gallery of covers, with base, view, size and sort](docs/images/library.jpg)
 
-> **Screenshot notes (remove before release).** The numbered placeholders below mark where supporting screenshots go. For every screenshot:
-> - Use Obsidian's default light theme, **Chart colours** set to **Full colour**, and a settings window about 1000 px wide, so all the images match.
-> - On a Mac, press ⌘⇧4, then Space, and click the window (hold ⌥ while clicking to leave out the shadow). Crop to the part that matters.
-> - Never show a token: blur or crop it out. The plugin's own token fields are always masked.
-> - Screenshots 3–5 are best taken in a test vault after **Start again**, so the settings look as a new user sees them; the rest in a vault with a full collection.
-> - Save each image in `docs/images/` under the file name given, then replace the placeholder with the image.
-
 ## Features
 
 - **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in your currency.
@@ -32,19 +25,9 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 - **Sync panel.** Buttons, progress and a log at the top of the dashboard, or in any note through a `music-sync` code block.
 - **Guided setup.** A Getting started list in settings, crossed off as you go, with links to where the Discogs and Genius tokens are made and the steps to make them.
 
-> **[Screenshot 9: A record note in reading view: cover, properties and tracklist with lyrics links]**  
-> *Placeholder: to be replaced with `docs/images/09-record-note.png`.*
->
-> - **What:** A record note in reading view: cover, properties and the start of the tracklist with lyrics links.
-> - **Why:** The note is the main thing the plugin makes, and people want to see one.
-> - **How:** Open a well-filled note in reading view (for example *Master Of Puppets*) and scroll so the cover and the start of the tracklist both show.
+![A record note in reading view: cover, properties and tracklist with lyrics links](docs/images/09-record-note.png)
 
-> **[Screenshot 3: Getting started in settings, with steps crossed out and a Discogs token tested]**  
-> *Placeholder: to be replaced with `docs/images/03-getting-started.png`.*
->
-> - **What:** **Getting started** in settings with the first steps crossed out, and the Discogs token row showing "✓ Connected to Discogs as …".
-> - **Why:** Shows what finishing setup looks like.
-> - **How:** In a test vault, press **Start again**, enter the username, paste the token and press **Test**. Capture before syncing, so steps 1–2 are crossed out and the rest aren't.
+![Getting started in settings, with steps crossed out and a Discogs token tested](docs/images/03-getting-started.png)
 
 
 ## Requirements
@@ -68,12 +51,7 @@ No other plugin is needed.
 3. Press the disc icon in the ribbon to open **Music**, and press **Sync from Discogs**. The sync creates a base for each format in your collection (Vinyl, CD, Cassette…) and fills it.
 4. Switch between the **Dashboard** and **Library** tabs to see your collection.
 
-> **[Screenshot 4: The sync panel during the first sync: a step per base, the progress bar and the record being added]**  
-> *Placeholder: to be replaced with `docs/images/04-sync-panel.png`.*
->
-> - **What:** The sync panel during the first sync: a step per base, the progress bar and the record being added.
-> - **Why:** A first sync takes a while, and this shows it's working.
-> - **How:** In the same test vault, press **Sync from Discogs** and capture within the first minute, while the progress bar is moving.
+![The sync panel during the first sync: a step per base, the progress bar and the record being added](docs/images/04-sync-panel.png)
 
 
 The [User Guide](User%20Guide.md) covers every feature and setting in detail.
