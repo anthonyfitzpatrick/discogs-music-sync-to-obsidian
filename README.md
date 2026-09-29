@@ -12,8 +12,8 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 
 - **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in your currency.
 - **Genius lyrics links.** Each track links to its lyrics on Genius where a match is found.
-- **Bases, sorted by format.** The first sync creates a base for each format in your collection (Vinyl, CD, Cassette…), each with its own folder and tag, and later syncs do the same for new formats. Every record goes to the base for its format, from anywhere in your Discogs collection: you don't need to file records into folders on Discogs, and formats are Discogs' own names, never typed. You can rename, merge or stop syncing bases.
-- **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to a *Removed from collection* folder, never deleted.
+- **Bases, sorted by format.** The first sync creates a base for each format in your collection (Vinyl, CD, Cassette…), each with its own folder and tag, and later syncs do the same for new formats. Every record goes to the base for its format, from anywhere in your Discogs collection: you don't need to file records into folders on Discogs, and formats are Discogs' own names, never typed. You can rename a base, give one base several formats, or stop syncing one.
+- **Safe syncing.** A sync only adds records. It never rewrites an existing note: only **Refresh prices** and **Update this record** change one, and only the fields that come from Discogs. Records you remove from Discogs are moved to a *Removed from collection* folder, never deleted.
 - **Your currency.** Prices, values and charts in any currency Discogs prices in, starting from your Discogs account's.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
 - **Update a record.** Brings one note up to date with Discogs (conditions graded later, corrected details, lyrics links) without touching what you wrote.
@@ -50,7 +50,7 @@ The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 
 ## Privacy and security
 
-- The plugin talks only to `api.discogs.com` and `api.genius.com`, and only when you start a sync, a price or value refresh, set up or edit bases, or test a token.
+- The plugin talks only to `api.discogs.com` and `api.genius.com`, and only when you start a sync, a price or value refresh or a record update, set up or edit bases, or test a token.
 - Tokens are kept in Obsidian's keychain for the vault on this device, encrypted by the operating system on macOS, Windows and Linux: never in a file, the vault or the plugin's `data.json`, so never in git or a shared sync. **Remove** and **Start again** in settings clear them.
 - Nothing is sent anywhere else, and there is no telemetry.
 
@@ -79,7 +79,7 @@ npm run check    # both
 
 Lint runs two rule sets, both with warnings treated as errors: the [anti-slop](https://github.com/dmmulroy/anti-slop) rules, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`, and the rules Obsidian's plugin review uses ([eslint-plugin-obsidianmd](https://github.com/obsidianmd/eslint-plugin)), configured in `eslint.config.mjs`. The pre-commit hook and CI both run lint and the tests.
 
-To release, set the same version in `manifest.json`, `package.json`, `versions.json` (mapped to the minimum Obsidian version) and `VERSION` in `src/main.js`; a test checks they agree. Commit, then push a tag with that version (for example `0.15.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`. Pushing a tag publishes: push branches only until a release is wanted.
+To release, set the same version in `manifest.json`, `package.json`, `versions.json` (mapped to the minimum Obsidian version) and `VERSION` in `src/main.js`; a test checks they agree. Commit, then push a tag with that version (for example `0.16.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`. Pushing a tag publishes: push branches only until a release is wanted.
 
 ## License
 

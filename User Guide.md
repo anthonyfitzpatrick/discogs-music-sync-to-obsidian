@@ -52,6 +52,7 @@ The plugin is careful with your notes:
 
 - A sync only **adds** records. It never overwrites a note that already exists, so anything you write in a record note is safe.
 - **Refresh prices** changes only the price fields.
+- **Update this record from Discogs**, which you run on one note, changes only the fields that come from Discogs and the tracklist (see [8.5](#85-updating-a-record-from-discogs)).
 - When you remove a record from Discogs, its note is **moved** to *Removed from collection* in your library folder, never deleted.
 
 ## 2. Requirements
@@ -111,7 +112,7 @@ The plugin's settings link to the same page, under the Genius token field, with 
 1. Open **Settings → Discogs music sync and dashboard**. Until setup is done, the top of the page shows a **Getting started** list: your username, your Discogs token, your Genius token (optional) and the first sync. Each step is crossed out as soon as you do it.
 2. Under **Discogs**, type your Discogs **Username**.
 3. Paste your Discogs token into **Personal access token**. It is saved at once, the field empties, and "Saved on this device. Press Test to check it." appears under it.
-4. Press **Test**. You should see "✓ Connected to Discogs as *your name*".
+4. Press **Test**. You should see "✓ Connected to Discogs as *your name* (prices in *your currency*)". The currency is your Discogs account's; you can change it later under **Prices** (see [5.7](#57-prices)).
 5. Under **Lyrics**, paste your Genius token into **Genius access token** and press **Test**. You should see "✓ Genius accepted the token".
 
 Tokens are kept in Obsidian's keychain for this vault on this device, not in a file (see [section 16](#16-privacy-and-security)). If you use the vault on another computer, or the plugin in another vault, enter them there too.
@@ -151,7 +152,7 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 - **Personal access token**: paste your token into the field. It is saved on this device at once and the field empties; "Saved on this device. Press Test to check it." appears under it. (A typed token is saved when you press Enter or leave the field.) The field is masked. Paste a new token at any time to replace it.
 - **Remove** (the bin beside Test): removes the saved token from this vault. Paste a token again to put it back.
 - **Test**: checks the saved token with Discogs, and the answer appears under the field. If there is still a token in the field, Test saves it first, so one press is enough.
-  - "✓ Connected to Discogs as *name*" means everything is fine.
+  - "✓ Connected to Discogs as *name* (prices in *currency*)" means everything is fine. The first successful check also sets **Currency** to your Discogs account's, unless you have chosen one.
   - "✗ The token belongs to *X*, but the username above is *Y*" means the token and username don't match. Syncing uses the username, so fix whichever is wrong.
   - "✗ Discogs didn't accept the token" means the token is wrong or has been revoked. Generate a new one and paste it.
   - If the username is empty when the token is checked, it is filled in from the token.
@@ -192,7 +193,7 @@ Text, lines and backgrounds always follow your theme.
 
 ### 5.7 Prices
 
-- **Currency**: the currency prices, the collection's value and the dashboard's charts are in. It starts as your Discogs account's own currency, found when you press **Test** or at the first sync, and you can choose any currency Discogs prices in: US dollar, euro, pound sterling, Canadian, Australian and New Zealand dollar, Swiss franc, Swedish krona, Japanese yen, Mexican peso, Brazilian real and South African rand. After changing it, run **Refresh prices** (see [section 9](#9-prices)).
+- **Currency**: the currency prices, the collection's value and the dashboard's charts are in. It starts as your Discogs account's own currency, found when you press **Test** or at the first sync, and you can choose any currency Discogs prices in: US dollar, euro, pound sterling, Canadian, Australian and New Zealand dollar, Swiss franc, Swedish krona, Japanese yen, Mexican peso, Brazilian real and South African rand. Until the account's currency is known, the choice reads **Same as my Discogs account**. After changing it, run **Refresh prices** (see [section 9](#9-prices)).
 
 ### 5.8 Sync
 
@@ -285,7 +286,7 @@ A sync:
 4. moves notes of records that have left your collection (see [7.2](#72-records-you-remove-from-discogs)),
 5. moves notes that are in the wrong base, for example after you change a base's formats (see [7.3](#73-records-in-the-wrong-base)),
 6. creates a note for each new record, base by base (see [section 8](#8-record-notes)),
-7. fetches Discogs' own value of your collection, for the dashboard.
+7. fetches Discogs' own value of your collection, in your chosen currency, for the dashboard.
 
 The summary at the end says how many records were added, moved and removed, and how many have no base.
 
@@ -472,7 +473,7 @@ A table with one row per base and a total, showing:
 
 - **Whole collection**: Discogs' own low, medium and high value for your collection (fetched with each sync), and the sum of each record's G+, VG+ and NM price suggestions.
 - **A typical album, by format**: for each Discogs format in your collection (Vinyl, CD, Cassette…) and for all of them together: how many records, what the cheapest quarter are worth up to, the median record, where the top quarter starts, the most valuable record, and how much of the value sits in the 20 most valuable. A record's format is the first Discogs lists for it, skipping *Box Set* and *All Media*, which only wrap the discs inside: a box set of LPs counts as Vinyl.
-- **Records by value**: how many records fall in each price band, per base.
+- **Records by value**: how many records fall in each price band, per base. The bands are sized for your currency: 50–100 kr, for example, is $5–10 or ¥750–1,500.
 - **Where the value sits**: the total value in each price band.
 - **Top 20 albums by value**: with the lowest listing, medium (VG+) and highest price for each. Click an album to open its note in reading view (Ctrl/Cmd-click for a new tab).
 
@@ -522,7 +523,7 @@ Media and sleeve conditions, best grade first. Conditions are copied from your D
 
 ### 10.13 Needs attention
 
-What's missing from your record notes: purchase dates, shops, original years, prices, covers and genres, with how many records lack each and the first few of them (click one to open its note).
+What's missing from your record notes: purchase dates, shops, original years, prices, covers and genres, with how many records lack each and the first few of them (click one to open its note). After a change of currency, it also lists records whose prices are still in the old one.
 
 ### 10.14 Choosing sections and colours
 
@@ -602,7 +603,7 @@ The library folder is `Music` unless you change it in settings.
 | What | Where |
 |---|---|
 | The Music view, its Dashboard and Library tabs, charts and layout | The plugin's code |
-| Settings (including the library folder, dashboard sections and colours), bases, the last run, the collection value and its history, the last tab and the Library's last choices | `.obsidian/plugins/discogs-music-sync/data.json` |
+| Settings (including the library folder, currency, dashboard sections and colours), bases, formats left out, the last run, the collection value and its history, the last exchange rates measured, the last tab and the Library's last choices | `.obsidian/plugins/discogs-music-sync/data.json` |
 | Discogs and Genius tokens | Obsidian's keychain for this vault on this device, encrypted by the operating system (Settings → Keychain) |
 
 ## 15. Upgrading from an earlier version
@@ -625,9 +626,9 @@ Your bases and settings carry over. The old files are left alone until you choos
 
 ## 16. Privacy and security
 
-- The plugin connects only to `api.discogs.com` and `api.genius.com`, and only when you sync, refresh prices or the collection value, set up or edit bases, or test a token. There is no telemetry.
+- The plugin connects only to `api.discogs.com` and `api.genius.com`, and only when you sync, refresh prices or the collection value, update a record, set up or edit bases, or test a token. There is no telemetry.
 - Genius is sent only artist and track names.
-- Tokens are kept in Obsidian's keychain for this vault, on this device. Despite the name it isn't Apple's: Obsidian encrypts it with macOS Keychain, Windows' own data protection or the Linux desktop's password store, whichever the computer has, and lists it under Settings → Keychain. Each vault has its own, so a token entered in one vault isn't seen in another. Uninstalling the plugin doesn't remove it: use **Remove** or **Start again** first, or delete the `discogs-music-sync-…-token` entries under Settings → Keychain. Tokens saved by versions 0.11 and 0.12 move there on their own the first time 0.13 loads. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
+- Tokens are kept in Obsidian's keychain for this vault, on this device. Despite the name it isn't Apple's: Obsidian encrypts it with macOS Keychain, Windows' own data protection or the Linux desktop's password store, whichever the computer has, and lists it under Settings → Keychain. Each vault has its own, so a token entered in one vault isn't seen in another. Uninstalling the plugin doesn't remove it: use **Remove** or **Start again** first, or delete the `discogs-music-sync-…-token` entries under Settings → Keychain. Tokens saved by earlier versions (in files before 0.11, in local storage in 0.11–0.12, and under the old plugin ID in 0.13–0.15) move there on their own. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
 - If a token has ever been exposed, revoke it on Discogs or Genius, create a new one and paste it into settings.
 
 ## 17. Troubleshooting
@@ -639,10 +640,13 @@ Setup isn't finished. Open **Settings → Discogs music sync and dashboard** and
 Shown by **Set up from Discogs** and the base dialog. Check your username and token with **Test**, then try again.
 
 **"⚠ N records with the format … have no base"**
-Those records aren't synced, because you stopped syncing their format or turned **Create bases automatically** off. Press **Create them again** under **Formats left out**, add a base with **Set up from Discogs** or **Add base**, or add the format to an existing base.
+Those records aren't synced, because you stopped syncing their format or turned **Create bases automatically** off. Press **Create them again** under **Formats left out**, add a base with **Set up from Discogs** or **+**, or add the format to an existing base.
 
 **"⚠ <base>: no record in your collection has the format …"**
 Nothing in your collection has that base's formats right now. Nothing is wrong if you haven't bought one yet; otherwise, edit the base and choose the right formats from the list.
+
+**"Couldn't update from Discogs: …"**
+Shown by **Update this record from Discogs**. "This record is no longer in your Discogs collection" means the copy was removed on Discogs; the next sync moves the note to *Removed from collection*. "This note has no discogs_id" means the note wasn't made by the plugin, or its `discogs_id` was deleted. For other errors, check your token with **Test**.
 
 **"Discogs didn't accept the token" or errors with 401**
 The token is wrong or has been revoked. Generate a new one on Discogs and paste it in.
@@ -680,7 +684,7 @@ Turn the plugin off and on in **Settings → Community plugins**, or restart Obs
 ## 18. Frequently asked questions
 
 **Will a sync overwrite what I've written in a note?**
-No. Existing notes are never rewritten by a sync. **Refresh prices** changes only the price fields. A note moved to the right base keeps everything you wrote.
+No. Existing notes are never rewritten by a sync. **Refresh prices** changes only the price fields, and **Update this record from Discogs** only the fields that come from Discogs and the tracklist. A note moved to the right base keeps everything you wrote.
 
 **Can I move or rename record notes?**
 Yes, within their base's folder. The sync recognises notes by `discogs_instance`, not by file name. Keep each note in its base's folder and keep its tag, or it drops out of that base.
