@@ -169,7 +169,7 @@ Shown only if your vault still has files that earlier versions of the plugin mad
 
 ### 5.5 Dashboard
 
-A switch for each of the dashboard's fourteen sections (see [section 10](#10-the-music-dashboard)). Turn off the ones you don't want; they are left out of the dashboard and its PDF.
+A switch for each of the dashboard's thirteen sections (see [section 10](#10-the-music-dashboard)). Turn off the ones you don't want; they are left out of the dashboard and its PDF.
 
 ### 5.6 Colours
 
@@ -348,7 +348,7 @@ Write anything you like under **Notes**, or anywhere else in the note. A sync ne
 |---|---|
 | `purchased` | Date you bought it. The dashboard's buying charts use this, falling back to `added_to_discogs`. |
 | `shop` | Where you bought it. Shown in the Library's Catalogue view, and searchable. |
-| `price_paid_sek` | What you paid |
+| `price_paid_sek` | What you paid, for your own records. Left empty for you to fill in; the dashboard doesn't use it. |
 | `listened` | Ticked for you when you tick the record on the dashboard's "not listened to yet" list, which also adds `listened_on`. |
 
 ### 8.3 Tracklist
@@ -410,7 +410,7 @@ The same panel can be added to any note with a code block:
 
 Below the panel are your collection's figures, read from your record notes. The dashboard redraws by itself shortly after a record note changes, is added, moved or removed, and when you change theme.
 
-The dashboard has fourteen sections, in this order. Turn any of them off in **Settings → Dashboard** (see [10.15](#1015-choosing-sections-and-colours)).
+The dashboard has thirteen sections, in this order. Turn any of them off in **Settings → Dashboard** (see [10.14](#1014-choosing-sections-and-colours)).
 
 ### 10.1 Overview
 
@@ -471,27 +471,19 @@ Your 15 most-collected artists. Compilations credited to "Various" are left out.
 - **Records added per month**: the last 18 months, per base, using `purchased`, or the Discogs date added when `purchased` is empty.
 - **Latest additions, not listened to yet**: your 15 newest records you haven't marked as listened to. Tick **Listened** to mark one; its note gets `listened: true` and today's date in `listened_on`, and it leaves the list.
 
-### 10.11 Spending
-
-Uses the `price_paid_sek` property, which you fill in yourself. Until a record has one, the section says so.
-
-- **What you paid and what it's worth**: the total paid, and for records with a value, what they cost against what they're worth now and the gain or loss.
-- **Best gains**: the ten records whose value has grown most over what you paid.
-- **Spent per year**: from the purchase dates.
-
-### 10.12 Listening
+### 10.11 Listening
 
 **Waiting longest**: the ten records you've owned longest without listening to them, with a Listened box to tick them off.
 
-### 10.13 Condition
+### 10.12 Condition
 
 Media and sleeve conditions, best grade first. Conditions are copied from your Discogs collection when a record is first synced, so grade copies on Discogs before syncing them, or fill in `media_condition` and `sleeve_condition` in the note. Until any record is graded, the section says so.
 
-### 10.14 Needs attention
+### 10.13 Needs attention
 
 What's missing from your record notes: purchase dates, shops, original years, prices, covers and genres, with how many records lack each and the first few of them (click one to open its note).
 
-### 10.15 Choosing sections and colours
+### 10.14 Choosing sections and colours
 
 - **Sections**: **Settings → Dashboard** has a switch for each section. Sections that are off are left out of the dashboard and its PDF.
 - **Colours**: **Settings → Colours → Chart colours**:

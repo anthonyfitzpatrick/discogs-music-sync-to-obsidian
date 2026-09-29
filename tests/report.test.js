@@ -144,23 +144,22 @@ const rich = [
 test("the added sections are all in the dashboard, each can be left out, and all can be", () => {
   const all = buildReport(rich, ["Vinyl", "CDs"], decodeCollectionValue(null), THEME, "now");
   for (const [, title] of SECTIONS) assert.ok(all.includes(`<h2>${title.replace("'", "&#39;")}</h2>`), title);
-  const noMarket = buildReport(rich, ["Vinyl", "CDs"], decodeCollectionValue(null), THEME, "now", { sections: { market: false, spending: false } });
-  assert.doesNotMatch(noMarket, /<h2>Market<\/h2>|<h2>Spending<\/h2>/);
+  const noMarket = buildReport(rich, ["Vinyl", "CDs"], decodeCollectionValue(null), THEME, "now", { sections: { market: false, buying: false } });
+  assert.doesNotMatch(noMarket, /<h2>Market<\/h2>|<h2>Buying<\/h2>/);
   assert.match(noMarket, /<h2>Pressings<\/h2>/);
   const none = buildReport(rich, ["Vinyl"], decodeCollectionValue(null), THEME, "now", { sections: Object.fromEntries(SECTIONS.map(([k]) => [k, false])) });
   assert.match(none, /Every dashboard section is turned off/);
   assert.doesNotMatch(all, /NaN|undefined|Infinity/);
 });
 
-test("the market, pressings, spending, listening, condition and attention figures are right", () => {
+test("the market, pressings, listening, condition and attention figures are right", () => {
   const html = buildReport(rich, ["Vinyl", "CDs"], decodeCollectionValue(null), THEME, "now");
   const part = (from, to) => html.slice(html.indexOf(`<h2>${from}</h2>`), to ? html.indexOf(`<h2>${to}</h2>`) : undefined);
   assert.match(part("Market", "What&#39;s in the collection"), /Rare One<\/td><td>A<\/td><td><span[^>]*>Vinyl<\/span><\/td><td class="num">2<\/td>/, "fewest for sale first");
   assert.match(part("Market", "What&#39;s in the collection"), /Above estimate[\s\S]*Rare One[\s\S]*\+50%/, "900 listed against a 600 estimate");
   assert.match(part("Pressings", "By decade"), /Reissue or repress — 50% \(1\)/);
   assert.match(part("Pressings", "By decade"), /Compilation — 50% \(1\)/);
-  assert.match(part("Spending", "Listening"), /Total paid<\/td><td class="num">150 kr/);
-  assert.match(part("Spending", "Listening"), /Gain or loss<\/td><td class="num">\+450 kr \(300%\)/);
+  assert.doesNotMatch(html, /<h2>Spending<\/h2>|Total paid/, "spending was removed in 0.13.1");
   const listening = part("Listening", "Condition");
   assert.match(listening, /Waiting longest[\s\S]*Common Two/, "not listened to, so waiting");
   assert.doesNotMatch(listening, /Rare One|Listened so far|Listened per month/);
@@ -171,10 +170,9 @@ test("the market, pressings, spending, listening, condition and attention figure
   assert.doesNotMatch(attention, /No original year/, "both have one");
 });
 
-test("spending and condition explain what's missing when nobody has filled them in", () => {
+test("condition explains what's missing when nobody has filled it in", () => {
   const bare = [decodeRecord({ title: "T", format: "1x Vinyl", added_to_discogs: "2026-01-01" }, "Vinyl", "", "x")];
   const html = buildReport(bare, ["Vinyl"], decodeCollectionValue(null), THEME, "now");
-  assert.match(html, /No record has one yet/);
   assert.match(html, /No record has a condition yet/);
 });
 

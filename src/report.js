@@ -43,7 +43,7 @@ function decodeRecord(fm, media, body, fallbackTitle, path = "") {
     discogsFormat: primaryFormat(fm.format, fm.media),
     mediaCondition: text(fm.media_condition), sleeveCondition: text(fm.sleeve_condition),
     purchased: day(fm.purchased), forSale: num(fm.market_for_sale), myCopy: num(fm.price_my_copy_sek), checked: day(fm.price_checked),
-    paid: num(fm.price_paid_sek), releaseYear: num(fm.year), originalYear: num(fm.original_year),
+    releaseYear: num(fm.year), originalYear: num(fm.original_year),
     compilation: /\bcompilation\b/i.test(text(fm.format)),
     reissue: /\b(reissue|repress|remaster(ed)?)\b/i.test(text(fm.format)) || (num(fm.year) !== null && num(fm.original_year) !== null && num(fm.year) > num(fm.original_year)),
     low: num(fm.price_low_sek), mid: num(fm.price_mid_sek), high: num(fm.price_high_sek),
@@ -261,7 +261,7 @@ const grid = (...cards) => `<div class="grid">${cards.join("")}</div>`;
 const SECTIONS = [
   ["overview", "Overview"], ["growth", "Growth over time"], ["value", "Value spread"], ["market", "Market"],
   ["contents", "What's in the collection"], ["pressings", "Pressings"], ["decades", "By decade"], ["artists", "Top artists"],
-  ["playing", "Playing time"], ["buying", "Buying"], ["spending", "Spending"], ["listening", "Listening"],
+  ["playing", "Playing time"], ["buying", "Buying"], ["listening", "Listening"],
   ["condition", "Condition"], ["attention", "Needs attention"],
 ];
 // Discogs' grading scale, best first, for the condition report.
@@ -431,26 +431,6 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
           series: media.map((m) => ({ name: m, color: MC[m], values: months.map((mo) => recs.filter((r) => r.media === m && r.added.startsWith(mo)).length) })) })) +
         card("Latest additions — not listened to yet", table(["Date", "Album", "Artist", "Media", ...(interactive ? ["Listened"] : [])],
           latest.map((r) => [r.added, album(r), esc(r.artist), pill(r.media), ...(interactive ? [listenBox(r)] : [])]))));
-    },
-
-    spending() {
-      const paid = recs.filter((r) => r.paid !== null);
-      if (!paid.length) return section("Spending", "", card("", note("Add what you paid for a record to its price_paid_sek property to see spending and gains here. No record has one yet.")));
-      const valued = paid.filter((r) => r[VK] !== null);
-      const spent = sum(paid, "paid"), now = sum(valued, VK), paidValued = sum(valued, "paid");
-      const gains = valued.map((r) => ({ r, gain: r[VK] - r.paid })).sort((a, b) => b.gain - a.gain).slice(0, 10);
-      const years = count(paid.map((r) => r.purchased.slice(0, 4)).filter(Boolean)).map(([y]) => y).sort();
-      const signed = (v) => `${v >= 0 ? "+" : "−"}${kr(Math.abs(v))}`;
-      return section("Spending", `${paid.length} of ${recs.length} records have a price paid`,
-        card("What you paid and what it's worth", table(["", "Amount"], [
-          ["Total paid", kr(spent)],
-          [`Paid for the ${valued.length} with a value`, kr(paidValued)],
-          [`Their value now (${haveSugg ? "VG+" : "cheapest listing"})`, kr(now)],
-          ["Gain or loss", paidValued ? `${signed(now - paidValued)} (${Math.round(((now - paidValued) / paidValued) * 100)}%)` : "—"],
-        ], [1])) + grid(
-          card("Best gains", table(["Album", "Paid", "Now", "Gain"], gains.map(({ r, gain }) => [album(r), kr(r.paid), kr(r[VK]), signed(gain)]), [1, 2, 3])),
-          card("Spent per year", years.length ? barChart(P, { labels: years, yTitle: "kr", series: [{ name: "Spent", colors: P.scale(years.length), values: years.map((y) => sum(paid.filter((r) => r.purchased.startsWith(y)), "paid")) }] }) : note("Add purchase dates to see spending per year.")),
-        ));
     },
 
     listening() {
