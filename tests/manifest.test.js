@@ -24,5 +24,5 @@ test("the manifest's name, ID and description follow the submission rules", () =
 test("the version is the same in the manifest, package.json, versions.json and the code", () => {
   assert.strictEqual(read("package.json").version, manifest.version);
   assert.strictEqual(read("versions.json")[manifest.version], manifest.minAppVersion);
-  assert.match(fs.readFileSync(path.join(__dirname, "..", "src", "main.js"), "utf8"), new RegExp(`const VERSION = "${manifest.version.replace(/\./g, "\\.")}";`));
+  assert.match(fs.readFileSync(path.join(__dirname, "..", "src", "version.ts"), "utf8"), new RegExp(`const VERSION = "${manifest.version.replace(/\./g, "\\.")}";`));
 });

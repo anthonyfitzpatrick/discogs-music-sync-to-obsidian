@@ -76,18 +76,18 @@ Use **Report a bug** or **Request a feature** at the bottom of the plugin's sett
 
 ## Development
 
-The source is in `src/`. `npm run build` bundles it into `main.js`.
+The source is TypeScript in `src/`, checked in strict mode: `main.ts` (the plugin), `engine.ts` (syncing with Discogs), `views.ts` (the Music view), `report.ts` (the dashboard and PDF), `settings.ts` and `modals.ts` (settings and dialogs), with the Discogs replies decoded in `discogs.ts` and JSON values typed in `json.ts`. `npm run build` bundles it into `main.js`; the tests run on `src/` directly, as Node reads TypeScript.
 
 ```
 npm install      # also points git at the pre-commit hook in hooks/
-npm run lint     # oxlint (anti-slop rules), then eslint (Obsidian's plugin review rules)
+npm run lint     # oxlint (anti-slop rules), tsc (strict types), then eslint (Obsidian's plugin review rules)
 npm test         # builds, then runs the tests in tests/
 npm run check    # both
 ```
 
-Lint runs two rule sets, both with warnings treated as errors: the [anti-slop](https://github.com/dmmulroy/anti-slop) rules, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`, and the rules Obsidian's plugin review uses ([eslint-plugin-obsidianmd](https://github.com/obsidianmd/eslint-plugin)), configured in `eslint.config.mjs`. The pre-commit hook and CI both run lint and the tests.
+Lint type-checks the source with `tsc` and runs two rule sets, all with warnings treated as errors: the [anti-slop](https://github.com/dmmulroy/anti-slop) rules, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`, and the rules Obsidian's plugin review uses ([eslint-plugin-obsidianmd](https://github.com/obsidianmd/eslint-plugin)), configured in `eslint.config.mjs`. The pre-commit hook and CI both run lint and the tests.
 
-To release, set the same version in `manifest.json`, `package.json`, `versions.json` (mapped to the minimum Obsidian version) and `VERSION` in `src/main.js`; a test checks they agree. Commit, then push a tag with that version (for example `0.16.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`. Pushing a tag publishes: push branches only until a release is wanted.
+To release, set the same version in `manifest.json`, `package.json`, `versions.json` (mapped to the minimum Obsidian version) and `VERSION` in `src/version.ts`; a test checks they agree. Commit, then push a tag with that version (for example `0.16.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`. Pushing a tag publishes: push branches only until a release is wanted.
 
 ## License
 

@@ -3,7 +3,7 @@ import esbuild from "esbuild";
 // Bundles src/ into the single main.js Obsidian loads, so a release needs only main.js,
 // manifest.json and styles.css.
 await esbuild.build({
-  entryPoints: ["src/main.js"],
+  entryPoints: ["src/main.ts"],
   outfile: "main.js",
   bundle: true,
   platform: "node",

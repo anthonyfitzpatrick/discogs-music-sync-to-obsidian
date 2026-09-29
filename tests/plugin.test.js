@@ -129,7 +129,9 @@ test("saved bases and username are kept as they are", async () => {
   const libs = [{ id: "lps", name: "LPs", formats: ["Vinyl"], dir: "Music/LPs", tag: "lps-library", icon: "disc-3", base: "Music/LPs.base" }];
   const { p } = await makePlugin({ username: "someone", libraries: libs });
   assert.strictEqual(p.data.username, "someone");
-  assert.deepStrictEqual(p.data.libraries, libs);
+  // everything but the .base file, which 0.11 replaced with the views and which is offered for removal
+  assert.deepStrictEqual(p.data.libraries, libs.map(({ base: _file, ...lib }) => lib));
+  assert.deepStrictEqual(p.data.legacyFiles, ["Music/LPs.base"]);
 });
 
 test("bases from 0.8 and 0.9, which synced a Discogs folder, take the format of the same name", async () => {

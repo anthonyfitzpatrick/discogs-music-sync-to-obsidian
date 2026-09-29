@@ -1,8 +1,8 @@
-// Tests the Music Library view's logic (src/library.js) directly.
+// Tests the Music Library view's logic (src/library.ts) directly.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { decodeRecord } = require("../src/report.js");
-const { COLUMNS, VIEWS, SIZES, DEFAULT_SIZE, libraryGroups } = require("../src/library.js");
+const { decodeRecord } = require("../src/report.ts");
+const { COLUMNS, VIEWS, SIZES, DEFAULT_SIZE, libraryGroups } = require("../src/library.ts");
 
 const rec = (media, fm) => decodeRecord({ artist: "A", title: "T", ...fm }, media, "", "x", `Music/${media}/${fm.title || "T"}.md`);
 const records = [

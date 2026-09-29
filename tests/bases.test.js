@@ -1,8 +1,8 @@
-// Tests the pure logic in src/bases.js and src/discogs.js directly: no Obsidian stand-in needed.
+// Tests the pure logic in src/bases.ts and src/discogs.ts directly: no Obsidian stand-in needed.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded } = require("../src/bases.js");
-const { decodeCollectionPage, decodeIdentity } = require("../src/discogs.js");
+const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded } = require("../src/bases.ts");
+const { decodeCollectionPage, decodeIdentity } = require("../src/discogs.ts");
 
 const vinyl = { id: "vinyl", name: "Vinyl", formats: ["Vinyl"], tag: "vinyl-library" };
 const cds = { id: "cds", name: "CDs", formats: ["CD", "CDr"], tag: "cd-library" };

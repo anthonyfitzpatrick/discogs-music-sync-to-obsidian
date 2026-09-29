@@ -1,10 +1,17 @@
 // Pure logic about bases, with no Obsidian dependency, so it is tested directly.
 
-const tidy = (s) => String(s ?? "").trim().replace(/\s+/g, " ");
-const slug = (s) => tidy(s).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+// A base: the records of some Discogs formats, in their own folder, with their own tag and icon.
+interface Base { id: string; name: string; dir: string; tag: string; icon: string; formats: string[] }
+// What a base dialog proposes, before it becomes a base.
+interface BaseProposal { name: string; formats?: string[] }
+// Anything with Discogs format names in Discogs' order, such as one item of the collection.
+interface HasFormats { formats: string[] }
+
+const tidy = (s: string | null | undefined): string => (s ?? "").trim().replace(/\s+/g, " ");
+const slug = (s: string): string => tidy(s).toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 // A sensible icon for a base named after a Discogs format.
-const guessIcon = (name) => {
+const guessIcon = (name: string): string => {
   const n = name.toLowerCase();
   if (/cass|tape/.test(n)) return "cassette-tape";
   if (/vinyl|lp|record|7"|12"|45|78/.test(n)) return "disc-3";
@@ -16,7 +23,7 @@ const guessIcon = (name) => {
 // Why a proposed base can't be used, judged against the other bases (not the one being edited),
 // or "" when it can. Checks against files in the vault are made by the caller.
 // No two bases may share a name, ignoring case and spacing.
-function nameProblem(v, others, editing) {
+function nameProblem(v: BaseProposal, others: Base[], editing: boolean): string {
   const name = tidy(v.name), s = slug(name);
   if (!name) return "Give the base a name.";
   if (/[\\/:*?"<>|#^[\]]/.test(name) || name.startsWith(".")) return "A name can't start with a dot or contain \\ / : * ? \" < > | # ^ [ ]";
@@ -35,11 +42,11 @@ function nameProblem(v, others, editing) {
 }
 
 // Format names are compared as Discogs spells them, ignoring only capitals and spacing.
-const sameFormat = (a, b) => tidy(a).toLowerCase() === tidy(b).toLowerCase();
+const sameFormat = (a: string, b: string): boolean => tidy(a).toLowerCase() === tidy(b).toLowerCase();
 
 // The base for a record: the first of its formats, in Discogs' order, that a base takes. A box set
 // listed as ["Box Set", "Vinyl"] goes to the Vinyl base unless a base takes Box Set. null if none.
-function baseFor(formats, libs) {
+function baseFor<B extends HasFormats>(formats: string[], libs: B[]): B | null {
   for (const f of formats) {
     const lib = libs.find((l) => l.formats.some((g) => sameFormat(g, f)));
     if (lib) return lib;
@@ -53,8 +60,8 @@ const CONTAINERS = new Set(["box set", "all media"]);
 // The formats that need a base of their own so that every record has a place, most records first.
 // For each record no base takes: its first format that isn't a wrapper (a wrapper only when that is
 // all it has), unless the user stopped syncing that format.
-function basesNeeded(items, libs, skipped = []) {
-  const counts = new Map();
+function basesNeeded(items: HasFormats[], libs: HasFormats[], skipped: string[] = []): string[] {
+  const counts = new Map<string, number>();
   for (const item of items) {
     if (baseFor(item.formats, libs)) continue;
     const f = item.formats.find((x) => !CONTAINERS.has(tidy(x).toLowerCase())) ?? item.formats[0];
@@ -66,10 +73,11 @@ function basesNeeded(items, libs, skipped = []) {
 }
 
 // How many records include each format, most common first: what Set up and the base dialog offer.
-function formatCounts(items) {
-  const counts = new Map();
+function formatCounts(items: HasFormats[]): { name: string; count: number }[] {
+  const counts = new Map<string, number>();
   for (const item of items) for (const f of new Set(item.formats)) counts.set(f, (counts.get(f) || 0) + 1);
   return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
+export type { Base, BaseProposal, HasFormats };
 export { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat, CONTAINERS };

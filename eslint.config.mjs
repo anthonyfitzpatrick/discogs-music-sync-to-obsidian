@@ -8,7 +8,7 @@ export default tseslint.config(
   { ignores: ["main.js", "node_modules/**", "tools/**", "tests/**", "*.mjs", "*.mts"] },
   ...obsidianmd.configs.recommended,
   {
-    files: ["src/**/*.js"],
+    files: ["src/**/*.ts"],
     languageOptions: {
       sourceType: "module",
       parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname },

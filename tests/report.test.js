@@ -1,10 +1,10 @@
-// Tests src/report.js directly: the PDF report is built without Obsidian, Dataview or Charts.
+// Tests src/report.ts directly: the PDF report is built without Obsidian, Dataview or Charts.
 const { test } = require("node:test");
 const STYLES = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "styles.css"), "utf8");
 const assert = require("node:assert");
-const reportModule = require("../src/report.js");
+const reportModule = require("../src/report.ts");
 const { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, tracklist, palette, SECTIONS, FULL_BASES } = reportModule;
-const { formatMoney, currencySymbol, currencyCode } = require("../src/currency.js");
+const { formatMoney, currencySymbol, currencyCode } = require("../src/currency.ts");
 // These fixtures are notes from before 0.16, priced in kronor, so the report is drawn in kronor unless a test says otherwise.
 const buildReport = (records, media, value, theme, stamp, options = {}) => reportModule.buildReport(records, media, value, theme, stamp, { currency: "SEK", ...options });
 const reportParts = (records, media, value, theme, interactive, options = {}) => reportModule.reportParts(records, media, value, theme, interactive, { currency: "SEK", ...options });

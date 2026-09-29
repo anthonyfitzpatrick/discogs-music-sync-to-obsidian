@@ -1,9 +1,7 @@
 import { defineConfig } from "oxlint";
 
 // The anti-slop rule set (github.com/dmmulroy/anti-slop), vendored in tools/oxlint/anti-slop
-// and enabled in full, as in the other Wolf 359 Press plugins. Most rules check TypeScript
-// type syntax and stay silent on this JavaScript source; they are enabled so they apply
-// the moment any file moves to TypeScript.
+// and enabled in full, as in the other Wolf 359 Press plugins, on the TypeScript source.
 export default defineConfig({
 	ignorePatterns: [
 		".agent/**",
@@ -30,7 +28,8 @@ export default defineConfig({
 		"anti-slop/no-object-parameters": "error",
 		"anti-slop/no-reflect-apply": "error",
 		"anti-slop/no-reflect-get": "error",
-		"anti-slop/no-runtime-typeof": "error",
+		// typeof belongs in type guards (value is X), where input is parsed at its boundary; nowhere else.
+		"anti-slop/no-runtime-typeof": ["error", { allowInTypeGuards: true }],
 		"anti-slop/no-shape-in-symbol-names": "error",
 		"anti-slop/no-unknown-parameters": "error",
 		"anti-slop/no-unknown-returns": "error",
@@ -38,7 +37,7 @@ export default defineConfig({
 		"anti-slop/no-unsafe-dictionary-type": "error",
 		"anti-slop/no-widen-then-assert": "error",
 		"anti-slop/require-safety-comment-for-type-assertion": "error",
-		// A name that hides another in an outer scope. It caused a real bug (`same` in bases.js).
+		// A name that hides another in an outer scope. It caused a real bug (`same` in bases.ts, when it was bases.js).
 		"eslint/no-shadow": "error",
 	},
 });

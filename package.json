@@ -7,7 +7,7 @@
   "author": "Anthony Fitzpatrick",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "lint": "oxlint --deny-warnings && eslint src --max-warnings 0",
+    "lint": "oxlint --deny-warnings && tsc -p . && eslint src --max-warnings 0",
     "test": "npm run build && node --test \"tests/*.test.js\"",
     "check": "npm run lint && npm test",
     "prepare": "git config core.hooksPath hooks"

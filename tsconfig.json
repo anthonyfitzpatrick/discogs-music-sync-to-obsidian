@@ -1,15 +1,19 @@
 {
-  "//": "Only for linting: lets the Obsidian lint rules read the JavaScript source with type information. Nothing is compiled.",
+  "//": "Type checking only: esbuild bundles src/ and Node runs the tests on it directly, so nothing is emitted here.",
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": false,
+    "strict": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
     "target": "es2022",
-    "module": "es2022",
-    "moduleResolution": "node",
+    "module": "esnext",
+    "moduleResolution": "bundler",
     "lib": ["es2022", "dom", "dom.iterable"],
     "types": [],
     "skipLibCheck": true
   },
-  "include": ["src/**/*.js"]
+  "include": ["src/**/*.ts"]
 }
