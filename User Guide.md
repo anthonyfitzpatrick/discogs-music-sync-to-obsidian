@@ -95,6 +95,9 @@ BRAT checks for new releases when Obsidian starts.
 1. Sign in at [discogs.com](https://www.discogs.com) and open [discogs.com/settings/developers](https://www.discogs.com/settings/developers) (Settings → Developers).
 2. Press **Generate new token** and copy it.
 
+> **[Screenshot 1: Discogs' Developers page, with Generate new token]**  
+> *Placeholder: to be replaced with `docs/images/01-discogs-token.png`.*
+
 The plugin's settings link to the same page, under the token field, with these steps under **How to get a token**.
 
 The token gives read access to your account. Treat it like a password.
@@ -105,6 +108,9 @@ The token gives read access to your account. Treat it like a password.
 2. Press **New API Client**. Any app name and website address will do, such as "Obsidian" and `https://obsidian.md`. Save it.
 3. Press **Generate Access Token** under the new client and copy the token.
 
+> **[Screenshot 2: Genius' API clients page, with Generate Access Token]**  
+> *Placeholder: to be replaced with `docs/images/02-genius-token.png`.*
+
 The plugin's settings link to the same page, under the Genius token field, with these steps.
 
 ### 4.3 Enter them in Obsidian
@@ -114,6 +120,9 @@ The plugin's settings link to the same page, under the Genius token field, with 
 3. Paste your Discogs token into **Personal access token**. It is saved at once, the field empties, and "Saved on this device. Press Test to check it." appears under it.
 4. Press **Test**. You should see "✓ Connected to Discogs as *your name* (prices in *your currency*)". The currency is your Discogs account's; you can change it later under **Prices** (see [5.7](#57-prices)).
 5. Under **Lyrics**, paste your Genius token into **Genius access token** and press **Test**. You should see "✓ Genius accepted the token".
+
+> **[Screenshot 3: Getting started in settings, with steps crossed out and a Discogs token tested]**  
+> *Placeholder: to be replaced with `docs/images/03-getting-started.png`.*
 
 Tokens are kept in Obsidian's keychain for this vault on this device, not in a file (see [section 16](#16-privacy-and-security)). If you use the vault on another computer, or the plugin in another vault, enter them there too.
 
@@ -140,6 +149,10 @@ The sync first reads your collection and creates a base for each format in it; t
 The first sync can take a while. Discogs allows about one request a second, and each record needs several requests: the release, its master, prices, cover and photos. Expect roughly 5 to 15 seconds per record, plus time for Genius lookups. A collection of 150 records takes about half an hour. Later syncs only fetch new records, so they are quick.
 
 You can keep working in Obsidian while it runs; the panel at the top of the dashboard shows the progress.
+
+> **[Screenshot 4: The sync panel during the first sync: a step per base, the progress bar and the record being added]**  
+> *Placeholder: to be replaced with `docs/images/04-sync-panel.png`.*
+
 
 ## 5. The settings page
 
@@ -170,6 +183,10 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 
 Below it, the list shows every base with its icon, name, formats, folder and tag.
 
+> **[Screenshot 5: The Bases section of settings: the switch, Set up from Discogs, and the list with its + , pencil and delete buttons]**  
+> *Placeholder: to be replaced with `docs/images/05-settings-bases.png`.*
+
+
 - The **+** button at the top of the list creates a base by hand.
 - The **pencil** button edits or renames a base.
 - The **delete** button stops syncing it, after asking. You can also select a base and press Delete.
@@ -195,6 +212,10 @@ Text, lines and backgrounds always follow your theme.
 
 - **Currency**: the currency prices, the collection's value and the dashboard's charts are in. It starts as your Discogs account's own currency, found when you press **Test** or at the first sync, and you can choose any currency Discogs prices in: US dollar, euro, pound sterling, Canadian, Australian and New Zealand dollar, Swiss franc, Swedish krona, Japanese yen, Mexican peso, Brazilian real and South African rand. Until the account's currency is known, the choice reads **Same as my Discogs account**. After changing it, run **Refresh prices** (see [section 9](#9-prices)).
 
+> **[Screenshot 6: The Currency setting with its list of currencies open]**  
+> *Placeholder: to be replaced with `docs/images/06-settings-currency.png`.*
+
+
 ### 5.8 Sync
 
 - **Download all images**: when on, every Discogs photo of a new record (back cover, labels, inserts) is saved and shown under **Images** in its note. When off, only the single front cover is downloaded, which makes syncing faster and uses less space.
@@ -209,6 +230,9 @@ These are the defaults for the export dialog. Whatever you pick in the dialog is
 ### 5.10 Reset
 
 - **Start again**: after asking, removes your Discogs and Genius tokens from this vault and sets the username, bases and every setting back to how a new install starts. Your record notes, covers and PDFs stay in the vault. The next sync creates the bases again, takes over their old folders and finds the notes already there, so nothing is duplicated. Use it before uninstalling the plugin to leave no tokens behind.
+
+> **[Screenshot 7: The Start again confirmation]**  
+> *Placeholder: to be replaced with `docs/images/07-start-again.png`.*
 
 ### 5.11 About
 
@@ -244,6 +268,9 @@ With **Create bases automatically** on, the next sync does this for you, creatin
 4. Choose an **Icon**. It is shown in the settings list and in the sync progress.
 5. The dialog shows what it will create, for example: *Creates Music/MiniDiscs/ and the tag #minidiscs-library.* (`Music` is your library folder.)
 6. Press **Add base**.
+
+> **[Screenshot 8: The Add base dialog: name, formats from the collection with their counts, icon, and what it will create]**  
+> *Placeholder: to be replaced with `docs/images/08-add-base.png`.*
 
 The folder is created straight away. The next sync fills the base with records. If a base's folder goes missing later, the next sync creates it again.
 
@@ -343,6 +370,9 @@ year: 1988
 (your Discogs notes for this copy, if any)
 ```
 
+> **[Screenshot 9: A record note in reading view: cover, properties and tracklist with lyrics links]**  
+> *Placeholder: to be replaced with `docs/images/09-record-note.png`.*
+
 Write anything you like under **Notes**, or anywhere else in the note. A sync never overwrites the note, and a price refresh only changes the price fields.
 
 ### 8.2 Properties
@@ -390,6 +420,9 @@ Covers are saved in `<base folder>/covers/`, named after the Discogs release ID.
 ### 8.5 Updating a record from Discogs
 
 A sync never rewrites an existing note. To bring one record up to date with Discogs, open its note and run **Update this record from Discogs** from the command palette, or right-click the note (or use its ⋯ menu) and choose **Update from Discogs**. It is useful when you grade a copy on Discogs after syncing it, when Discogs corrects a release, or to add lyrics links to a note made while lyrics were off.
+
+> **[Screenshot 10: A record note's right-click menu, with Update from Discogs]**  
+> *Placeholder: to be replaced with `docs/images/10-update-record.png`.*
 
 It replaces:
 
@@ -450,6 +483,9 @@ The same panel can be added to any note with a code block:
 ```
 ````
 
+> **[Screenshot 11: The Music view in Obsidian: sync panel, Dashboard and Library tabs, and the top of the dashboard]**  
+> *Placeholder: to be replaced with `docs/images/11-music-view.png`.*
+
 Below the panel are your collection's figures, read from your record notes. The dashboard redraws by itself shortly after a record note changes, is added, moved or removed, and when you change theme.
 
 The dashboard has thirteen sections, in this order. Turn any of them off in **Settings → Dashboard** (see [10.14](#1014-choosing-sections-and-colours)).
@@ -469,6 +505,9 @@ A table with one row per base and a total, showing:
 - **Records owned**: how many records you owned at the end of each month, per base and in all, from each record's purchase date (or the date it was added to Discogs).
 - **Collection value (Discogs)**: Discogs' low, median and high value of your collection at each sync, one point per day. It starts with the first sync after you install version 0.12, and the chart appears once there are two syncs on different days.
 
+> **[Screenshot 12: Growth over time: records owned and the collection's value]**  
+> *Placeholder: to be replaced with `docs/images/12-growth.png`.*
+
 ### 10.3 Value spread
 
 - **Whole collection**: Discogs' own low, medium and high value for your collection (fetched with each sync), and the sum of each record's G+, VG+ and NM price suggestions.
@@ -478,6 +517,10 @@ A table with one row per base and a total, showing:
 - **Top 20 albums by value**: with the lowest listing, medium (VG+) and highest price for each. Click an album to open its note in reading view (Ctrl/Cmd-click for a new tab).
 
 These use the VG+ price suggestion when available, and the cheapest listing otherwise.
+
+> **[Screenshot 13: Value spread: whole collection, a typical album by format, and the value bands]**  
+> *Placeholder: to be replaced with `docs/images/13-value-spread.png`.*
+
 
 ### 10.4 Market
 
@@ -555,6 +598,9 @@ Along the top:
 - **Sort**: the view's own order, or artist, album, year, newest first or most valuable.
 - **Search**: artist, album, label, catalogue number, country, shop, base, genre or style. Every word must match.
 
+> **[Screenshot 14: The Library in Gallery view, and in Catalogue view]**  
+> *Placeholder: to be replaced with `docs/images/14-library-views.png`.*
+
 The count on the right says how many records are shown. Click a record to open its note in reading view (Ctrl/Cmd-click for a new tab). The Library remembers your choices, and redraws by itself when record notes change, keeping your place in the list. After opening a record, **Back** returns you to the same place.
 
 ## 12. Exporting the dashboard as a PDF
@@ -566,6 +612,10 @@ The count on the right says how many records are shown. Click a record to open i
 The PDF has the same sections, figures and charts as the dashboard, drawn by the plugin itself. Charts and tables are kept whole on a page, and every page has a footer with the date and page number. On landscape pages, charts sit two to a row; on portrait pages, one. The PDF is saved in `Exports` in your library folder as, for example, `Music Dashboard 2026-09-28 2105 A4 landscape.pdf`, and opened in your PDF viewer.
 
 The PDF uses your theme's colours. With a dark theme, pages have a dark background.
+
+> **[Screenshot 15: The Export PDF dialog, and the first page of an exported PDF]**  
+> *Placeholder: to be replaced with `docs/images/15-pdf-export.png`.*
+
 
 ## 13. Commands and ribbon icons
 

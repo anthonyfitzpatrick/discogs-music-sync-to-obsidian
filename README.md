@@ -25,6 +25,13 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 - **Sync panel.** Buttons, progress and a log at the top of the dashboard, or in any note through a `music-sync` code block.
 - **Guided setup.** A Getting started list in settings, crossed off as you go, with links to where the Discogs and Genius tokens are made and the steps to make them.
 
+> **[Screenshot 9: A record note in reading view: cover, properties and tracklist with lyrics links]**  
+> *Placeholder: to be replaced with `docs/images/09-record-note.png`.*
+
+> **[Screenshot 3: Getting started in settings, with steps crossed out and a Discogs token tested]**  
+> *Placeholder: to be replaced with `docs/images/03-getting-started.png`.*
+
+
 ## Requirements
 
 - Obsidian 1.13 or later, desktop only (macOS, Windows or Linux).
@@ -45,6 +52,10 @@ No other plugin is needed.
 2. Enter your Discogs username. Paste your personal access token (the link under the field goes to the page that makes one) and press **Test**. Do the same for a Genius token if you want lyrics links.
 3. Press the disc icon in the ribbon to open **Music**, and press **Sync from Discogs**. The sync creates a base for each format in your collection (Vinyl, CD, Cassette…) and fills it.
 4. Switch between the **Dashboard** and **Library** tabs to see your collection.
+
+> **[Screenshot 4: The sync panel during the first sync: a step per base, the progress bar and the record being added]**  
+> *Placeholder: to be replaced with `docs/images/04-sync-panel.png`.*
+
 
 The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 
