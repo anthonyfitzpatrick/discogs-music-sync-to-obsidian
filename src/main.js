@@ -22,7 +22,7 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "0.14.0";
+const VERSION = "0.14.1";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat } from "./bases.js";
@@ -1024,7 +1024,9 @@ class ConfirmModal extends Modal {
 }
 
 class MusicSettingTab extends PluginSettingTab {
-  constructor(app, plugin) { super(app, plugin); this.plugin = plugin; this.legacy = []; }
+  constructor(app, plugin) { super(app, plugin); this.plugin = plugin; this.legacy = []; this.tokenStatus = {}; }
+  // A token check's answer is kept while the tab is open, and forgotten when it closes.
+  hide() { this.tokenStatus = {}; super.hide(); }
 
   // Obsidian draws the tab from these definitions and indexes them for its settings search. Plain values
   // are controls, read and saved through getControlValue and setControlValue; rows with buttons, tokens
@@ -1044,8 +1046,9 @@ class MusicSettingTab extends PluginSettingTab {
         { name: "Personal access token", aliases: ["Discogs token"], desc: "Required. Create one at discogs.com → Settings → Developers.",
           render: (s) => this.tokenRow(s, "discogs", "Discogs", async () => {
             const who = await P.discogsIdentity();
-            if (!d.username) { d.username = who; await P.save(); redraw(); }
-            return who.toLowerCase() === d.username.toLowerCase() ? `Connected as ${who}` : `The token belongs to ${who}, but the username above is ${d.username}`;
+            if (!d.username) { d.username = who; await P.save(); }          // shown when the check redraws the tab
+            if (who.toLowerCase() !== d.username.toLowerCase()) throw new Error(`The token belongs to ${who}, but the username above is ${d.username}. Change one of them`);
+            return `Connected to Discogs as ${who}`;
           }) },
       ] },
       { type: "group", heading: "Lyrics", items: [
@@ -1181,23 +1184,44 @@ class MusicSettingTab extends PluginSettingTab {
   }
 
   // A token is kept in Obsidian's secret storage on this device: never in a file, the vault or the plugin's settings.
+  // Pasting a token saves it and checks it with the service at once; so does Enter, leaving the field, or
+  // Test, which also checks a token already saved. The answer shows under the field, and is kept when
+  // the tab redraws.
   tokenRow(s, kind, service, test) {
-    const P = this.plugin, saved = !!P.token(kind);
-    s.descEl.createDiv({ text: saved ? "A token is saved on this device." : "No token saved yet." });
+    const P = this.plugin;
+    const status = s.descEl.createDiv({ cls: "mls-token-status" });
+    const show = (text, state = "") => {
+      this.tokenStatus[kind] = { text, state };
+      status.setText(text);
+      status.toggleClass("is-ok", state === "ok"); status.toggleClass("is-error", state === "error");
+    };
+    const kept = this.tokenStatus[kind];
+    if (kept) show(kept.text, kept.state); else show(P.token(kind) ? "A token is saved on this device." : "No token saved yet.");
+    let input, button, run = 0;
+    const check = async () => {
+      const typed = input.getValue().trim();
+      if (typed) { P.saveToken(kind, typed); input.setValue(""); input.setPlaceholder("Paste to replace"); }
+      if (!P.token(kind)) { show("No token saved yet. Paste one into the field.", "error"); return; }
+      const mine = ++run;                                      // a newer check replaces this one's answer
+      button.setDisabled(true).setButtonText("Checking…");
+      show(`${typed ? "Saved on this device. " : ""}Checking with ${service}…`);
+      let answer, ok = false;
+      try { answer = await test(); ok = true; } catch (e) { answer = e.message; }
+      if (mine !== run) return;
+      show(ok ? `✓ ${answer}. The token is saved on this device.` : `✗ ${answer}. Paste a new token to replace it.`, ok ? "ok" : "error");
+      button.setDisabled(false).setButtonText("Test");
+      this.update();                                           // the getting-started steps, the username and the setup button follow
+    };
     s.addText((t) => {
+      input = t;
       t.inputEl.type = "password";
-      t.setPlaceholder(saved ? "Paste a new token to replace it" : "Paste the token here");
-      // saved when the field is left, not on every keystroke, so a half-pasted token is never stored
-      t.inputEl.addEventListener("change", () => {
-        const x = t.getValue().trim(); if (!x) return;
-        P.saveToken(kind, x); new Notice(`${service} token saved on this device`); this.update();
-      });
+      t.setPlaceholder(P.token(kind) ? "Paste to replace" : "Paste token here");
+      // A pasted token is complete: it is saved and checked straight away. A typed one waits for Enter
+      // or leaving the field, so a half-typed token is never stored.
+      t.inputEl.addEventListener("paste", () => window.setTimeout(() => void check(), 0));
+      t.inputEl.addEventListener("change", () => { if (t.getValue().trim()) void check(); });
     });
-    s.addButton((b) => b.setButtonText("Test").setDisabled(!saved).onClick(async () => {
-      b.setDisabled(true); b.setButtonText("Testing…");
-      try { new Notice(await test(), 6000); } catch (e) { new Notice(e.message, 8000); }
-      b.setDisabled(false); b.setButtonText("Test");
-    }));
+    s.addButton((b) => { button = b; b.setButtonText("Test").onClick(() => void check()); });
   }
 
   // The About / Support footer shared with the other Wolf 359 Press plugins.

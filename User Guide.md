@@ -143,17 +143,17 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 
 - **Library folder**: the folder new bases get their folders in, and where removed records and PDF exports go. It is `Music` unless you change it, and can be anywhere in your vault, such as `Collections/Records`. Bases you already have keep their folders. A name Obsidian can't use (one starting with a dot, or containing `\ : * ? " < > | # ^ [ ]`) is shown in red under the field and isn't saved.
 - **Username**: the Discogs account whose collection is synced.
-- **Personal access token**: paste a token and press Enter (or leave the field) to save it. The field is masked and always shows empty; the description says whether a token is saved on this device. Paste a new token at any time to replace it.
-- **Test**: checks the saved token with Discogs.
-  - "Connected as *name*" means everything is fine.
-  - "The token belongs to *X*, but the username above is *Y*" means the token and username don't match. Syncing uses the username, so fix whichever is wrong.
-  - "Discogs didn't accept the token" means the token is wrong or has been revoked. Generate a new one.
-  - If the username is empty when you test, it is filled in from the token.
+- **Personal access token**: paste your token into the field. It is saved on this device and checked with Discogs straight away, and the answer appears under the field. (A typed token is saved and checked when you press Enter or leave the field.) The field is masked and empties once the token is saved. Paste a new token at any time to replace it.
+- **Test**: checks the saved token again, or saves and checks whatever is in the field, in one press.
+  - "✓ Connected to Discogs as *name*" means everything is fine.
+  - "✗ The token belongs to *X*, but the username above is *Y*" means the token and username don't match. Syncing uses the username, so fix whichever is wrong.
+  - "✗ Discogs didn't accept the token" means the token is wrong or has been revoked. Generate a new one and paste it.
+  - If the username is empty when the token is checked, it is filled in from the token.
 
 ### 5.2 Lyrics
 
 - **Add Genius lyrics links**: when on, each track of a newly added record is looked up on Genius. Turn it off to make syncing faster.
-- **Genius access token** and **Test**: work the same way as the Discogs token.
+- **Genius access token** and **Test**: work the same way as the Discogs token: paste it, and the answer from Genius appears under the field.
 
 ### 5.3 Bases
 

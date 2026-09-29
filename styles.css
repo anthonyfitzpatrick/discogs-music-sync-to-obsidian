@@ -357,3 +357,7 @@
 
 /* Reads the active theme's colours for the PDF and the charts; never shown. */
 .mls-theme-probe { display: none; font-family: var(--font-text, sans-serif); }
+
+/* The answer under a token field: saved, checking, accepted or refused. */
+.mls-token-status.is-ok { color: var(--text-success); }
+.mls-token-status.is-error { color: var(--text-error); }
