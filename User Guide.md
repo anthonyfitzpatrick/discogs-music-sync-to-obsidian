@@ -2,13 +2,6 @@
 
 Discogs music sync and dashboard (repository: *Discogs Music Sync to Obsidian*, plugin ID `discogs-music-sync`) turns your Discogs collection into a music library inside your Obsidian vault. This guide explains how to set it up and how to use each part of it.
 
-> **Screenshot notes (remove before release).** The numbered placeholders below mark where supporting screenshots go. For every screenshot:
-> - Use Obsidian's default light theme, **Chart colours** set to **Full colour**, and a settings window about 1000 px wide, so all the images match.
-> - On a Mac, press ⌘⇧4, then Space, and click the window (hold ⌥ while clicking to leave out the shadow). Crop to the part that matters.
-> - Never show a token: blur or crop it out. The plugin's own token fields are always masked.
-> - Screenshots 3–5 are best taken in a test vault after **Start again**, so the settings look as a new user sees them; the rest in a vault with a full collection.
-> - Save each image in `docs/images/` under the file name given, then replace the placeholder with the image.
-
 ## Contents
 
 1. [About the plugin](#1-about-the-plugin)
@@ -102,14 +95,9 @@ BRAT checks for new releases when Obsidian starts.
 1. Sign in at [discogs.com](https://www.discogs.com) and open [discogs.com/settings/developers](https://www.discogs.com/settings/developers) (Settings → Developers).
 2. Press **Generate new token** and copy it.
 
-> **[Screenshot 1: Discogs' Developers page, with Generate new token]**  
-> *Placeholder: to be replaced with `docs/images/01-discogs-token.png`.*
->
-> - **What:** Discogs' Developers page, showing the **Generate new token** button.
-> - **Why:** New users need to find the right page and the right button.
-> - **How:** Open discogs.com/settings/developers and capture before generating a token, or blur the token afterwards.
-
 The plugin's settings link to the same page, under the token field, with these steps under **How to get a token**.
+
+![The Personal access token setting, with How to get a token open and the token tested](docs/images/01-discogs-token.png)
 
 The token gives read access to your account. Treat it like a password.
 
@@ -119,14 +107,9 @@ The token gives read access to your account. Treat it like a password.
 2. Press **New API Client**. Any app name and website address will do, such as "Obsidian" and `https://obsidian.md`. Save it.
 3. Press **Generate Access Token** under the new client and copy the token.
 
-> **[Screenshot 2: Genius' API clients page, with Generate Access Token]**  
-> *Placeholder: to be replaced with `docs/images/02-genius-token.png`.*
->
-> - **What:** Genius' API clients page, showing a client with **Generate Access Token**.
-> - **Why:** The Genius steps are the most confusing part of setup.
-> - **How:** Open genius.com/api-clients and capture a client with the button showing. Blur the client ID, secret and any token.
-
 The plugin's settings link to the same page, under the Genius token field, with these steps.
+
+![The Genius access token setting, with How to get a token open and the token tested](docs/images/02-genius-token.png)
 
 ### 4.3 Enter them in Obsidian
 
