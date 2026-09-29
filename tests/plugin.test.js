@@ -150,6 +150,28 @@ test("a sync without a username or token explains what's missing and does nothin
   assert.strictEqual(p.state.running, false);
 });
 
+test("a new install's sync shows no bases until it has read the collection, then exactly its formats", async () => {
+  const { p, files } = await makePlugin(undefined);
+  p.data.username = "someone"; p.saveToken("discogs", "t");
+  const labels = () => (p.state.stepList || p.steps()).map((st) => st.label);
+  let before = null;
+  network = async (req) => {
+    if (req.url.includes("collection/folders/0/releases")) {
+      before ??= labels();
+      return { status: 200, json: { releases: [item(1, ["CD"]), item(2, ["Minidisc"]), item(3, ["Box Set", "CD"])], pagination: { page: 1, pages: 1 } } };
+    }
+    if (req.url.includes("collection/fields")) { p.cancelled = true; return { status: 200, json: { fields: [] } }; }   // stop before fetching records
+    if (req.url.includes("collection/value")) return { status: 200, json: { minimum: "SEK1.00", median: "SEK2.00", maximum: "SEK3.00" } };
+    return { status: 404, json: {} };
+  };
+  await p.run("sync");
+  assert.deepStrictEqual(before, ["Collection value"], "before the collection is read, no base is shown");
+  assert.deepStrictEqual(labels(), ["CD", "Minidisc", "Collection value"], "after it, one per format found, spelled as Discogs spells it");
+  assert.deepStrictEqual(p.data.libraries.map((l) => l.dir), ["Music/CD", "Music/Minidisc"]);
+  const made = [...files.values()].map((f) => f.path);
+  assert.ok(!made.some((f) => /vinyl|cassette|tapes/i.test(f)), "no Vinyl, Cassette or Tapes anywhere");
+});
+
 test("adding a base creates only its folder: no .base files or other files", async () => {
   const { p, files, app } = await makePlugin(undefined);
   const lib = await p.addLibrary({ name: " Mini  Discs ", formats: ["Minidisc"], icon: "disc-2" });
