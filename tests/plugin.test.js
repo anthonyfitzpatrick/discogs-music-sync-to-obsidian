@@ -318,10 +318,10 @@ test("a token can be removed from the vault's keychain", async () => {
   p.saveToken("discogs", "abc"); p.saveToken("genius", "def");
   p.forgetToken("discogs");
   assert.strictEqual(p.token("discogs"), "");
-  assert.ok(!secrets.has("music-library-sync-discogs-token"), "deleted, not left behind empty");
+  assert.ok(!secrets.has("discogs-music-sync-discogs-token"), "deleted, not left behind empty");
   assert.strictEqual(p.token("genius"), "def", "the other token stays");
   p.saveToken("genius", "  ");
-  assert.ok(!secrets.has("music-library-sync-genius-token"), "saving an empty token removes it");
+  assert.ok(!secrets.has("discogs-music-sync-genius-token"), "saving an empty token removes it");
 });
 
 test("Start again removes the tokens and resets every setting, keeping the notes; the next sync finds them", async () => {
@@ -358,6 +358,101 @@ test("adding a base by hand for a left-out format brings it back into the sync",
   const { p } = await makePlugin({ username: "someone", skippedFormats: ["Cassette", "CD"] });
   await p.addLibrary({ name: "Tapes", formats: ["cassette"] });
   assert.deepStrictEqual(p.data.skippedFormats, ["CD"]);
+});
+
+// A Discogs that prices the account in kronor and converts at 10 kronor to the dollar.
+const pricedDiscogs = (seen) => async (url) => {
+  seen?.push(url);
+  if (url.startsWith("users/someone/collection/value")) return { minimum: "SEK1,000.00", median: "SEK2,000.00", maximum: "SEK3,000.00" };
+  if (url.startsWith("users/someone/collection/folders")) return { releases: [item(7, ["Vinyl"])], pagination: { page: 1, pages: 1 } };
+  if (url.startsWith("users/someone")) return { username: "someone", curr_abbr: "SEK" };
+  const stats = url.match(/^marketplace\/stats\/(\d+)\?curr_abbr=(\w+)$/);
+  if (stats) return { num_for_sale: 3, lowest_price: { value: stats[2] === "SEK" ? 150 : 15, currency: stats[2] } };
+  if (url.startsWith("marketplace/price_suggestions/")) return { "Very Good Plus (VG+)": { value: 300 }, "Mint (M)": { value: 500 } };
+  return {};
+};
+
+test("an install from before 0.16 keeps kronor; a new one waits to learn the Discogs account's currency", async () => {
+  const { p: old } = await makePlugin({ username: "someone", libraries: [VINYL] });
+  assert.strictEqual(old.data.currency, "SEK");
+  const { p: fresh } = await makePlugin(undefined);
+  assert.strictEqual(fresh.data.currency, "");
+  assert.strictEqual(fresh.reportOptions().currency, "USD", "shown in dollars until then, though there are no prices yet");
+  const { p: chosen } = await makePlugin({ username: "someone", libraries: [VINYL], currency: "eur" });
+  assert.strictEqual(chosen.data.currency, "EUR");
+});
+
+test("prices are fetched in the chosen currency, suggestions converted at Discogs' own rate", async () => {
+  const { eng } = makeEngine(makeVault(), [VINYL], []);
+  eng.cfg.currency = "USD";
+  const seen = [];
+  eng.discogs = pricedDiscogs(seen);
+  const pr = await eng.prices(7, "");
+  assert.deepStrictEqual([pr.market_lowest, pr.price_mid, pr.price_max, pr.price_currency, pr.market_for_sale], [15, 30, 50, "USD", 3]);
+  assert.strictEqual(eng.cfg.rates["SEK>USD"].rate, 0.1, "the rate is kept for later runs");
+  await eng.prices(8, "");
+  assert.strictEqual(seen.filter((u) => u.endsWith("curr_abbr=SEK")).length, 1, "the rate is measured once a run");
+  const value = await eng.collectionValue();
+  assert.deepStrictEqual([value.min, value.med, value.max, value.currency], [100, 200, 300, "USD"], "the collection's value is converted too");
+});
+
+test("with no currency chosen, the Discogs account's is used and remembered", async () => {
+  const { eng } = makeEngine(makeVault(), [VINYL], []);
+  let told = "";
+  eng.cfg.onCurrency = (c) => { told = c; };
+  const seen = [];
+  eng.discogs = pricedDiscogs(seen);
+  const pr = await eng.prices(7, "");
+  assert.deepStrictEqual([pr.market_lowest, pr.price_mid, pr.price_currency, told], [150, 300, "SEK", "SEK"]);
+  assert.strictEqual(seen.filter((u) => u.startsWith("marketplace/stats/7")).length, 1, "no conversion needed, so no second listing request");
+});
+
+test("Refresh prices moves a note from before 0.16 to the new price properties, keeping what the user paid", async () => {
+  const old = `---\nartist: "A"\ntitle: "T"\nmedia_condition: ""\nprice_paid_sek: 120\nprice_low_sek: 1\nprice_mid_sek: 2\nprice_high_sek: 3\nprice_max_sek: 4\nprice_my_copy_sek: \nmarket_lowest_sek: 5\nmarket_for_sale: 1\nprice_checked: 2026-01-01\ndiscogs_id: 7\ndiscogs_instance: 70\ntags:\n  - vinyl-library\n---\n# A – T\n\nMy notes.\n`;
+  const vault = makeVault({ "Music/Vinyl": null, "Music/Vinyl/T.md": old });
+  const { eng } = makeEngine(vault, [VINYL], []);
+  eng.cfg.currency = "SEK";
+  eng.discogs = pricedDiscogs();
+  assert.strictEqual(await eng.refreshPrices(VINYL), 1);
+  const now = vault.text("Music/Vinyl/T.md");
+  assert.doesNotMatch(now, /_sek:/, "no property from before 0.16 is left");
+  assert.match(now, /^price_paid: 120$/m, "what the user paid keeps its value");
+  assert.match(now, /^price_mid: 300$/m);
+  assert.match(now, /^market_lowest: 150$/m);
+  assert.match(now, /^price_currency: SEK$/m);
+  assert.match(now, /My notes\./);
+});
+
+test("Update record brings a note's Discogs details up to date and keeps everything the user wrote", async () => {
+  const note = `---\nartist: "Old name"\ntitle: "T"\nyear: 1990\noriginal_year: 1990\ngenres:\n  - "Old genre"\n  - "Gone"\nstyles:\nlabel: ""\ncatno: ""\ncountry: ""\nformat: ""\nmedia: "Vinyl"\ncover: \nmedia_condition: ""\nsleeve_condition: ""\npurchased: 2025-05-01\nshop: "A fair"\nprice_paid_sek: 99\nprice_mid_sek: 1\nlistened: true\ndiscogs_id: 7\ndiscogs_instance: 70\ncssclasses:\n  - vinyl-record\ntags:\n  - vinyl-library\n---\n# Old name – T\n\n## Tracklist\n\n<!-- tracklist v2 -->\n| old | table |\n\n## Images\n\n## Notes\n\nBought on holiday.\n`;
+  const vault = makeVault({ "Music/Vinyl": null, "Music/Vinyl/T.md": note });
+  const { eng } = makeEngine(vault, [VINYL], []);
+  eng.cfg.currency = "SEK";
+  const priced = pricedDiscogs();
+  eng.discogs = async (url, binary) => {
+    if (url === "releases/7") return { id: 7, title: "T", year: 1991, master_id: 70, artists: [{ name: "New name" }], labels: [{ name: "EMI", catno: "E1" }],
+      country: "UK", genres: ["Rock"], styles: ["Pop Rock"], formats: [{ name: "Vinyl", qty: "1", descriptions: ["LP"] }],
+      images: [{ type: "primary", uri: "https://img/7.jpg" }], tracklist: [{ type_: "track", position: "A1", title: "Pay $1 for $&", duration: "3:00" }] };
+    if (url === "masters/70") return { year: 1985 };
+    if (url === "users/someone/collection/releases/7") return { releases: [{ ...item(70, ["Vinyl"]), id: 7, notes: [{ field_id: 1, value: "Near Mint (NM or M-)" }] }], pagination: { page: 1, pages: 1 } };
+    if (url === "users/someone/collection/fields") return { fields: [{ id: 1, name: "Media Condition" }] };
+    if (binary) return new ArrayBuffer(1);
+    return priced(url);
+  };
+  assert.strictEqual(await eng.updateRecord(VINYL, "Music/Vinyl/T.md"), true);
+  const now = vault.text("Music/Vinyl/T.md");
+  assert.match(now, /^artist: "New name"$/m);
+  assert.match(now, /^original_year: 1985$/m);
+  assert.match(now, /^genres:\n  - "Rock"\nstyles:\n  - "Pop Rock"$/m, "lists replaced whole, nothing left of the old ones");
+  assert.match(now, /^media_condition: "Near Mint \(NM or M-\)"$/m, "a condition graded on Discogs after the sync");
+  assert.match(now, /^cover: "\[\[7\.jpg\]\]"$/m, "a missing cover is added");
+  assert.match(now, /^price_mid: 300$/m);
+  assert.doesNotMatch(now, /_sek:/);
+  for (const kept of [/^purchased: 2025-05-01$/m, /^shop: "A fair"$/m, /^price_paid: 99$/m, /^listened: true$/m, /^  - vinyl-library$/m, /Bought on holiday\./])
+    assert.match(now, kept, `kept: ${kept}`);
+  assert.match(now, /Pay \$1 for \$&/, "a $ in a track title is kept as it is");
+  assert.doesNotMatch(now, /old \| table/, "the tracklist is rebuilt");
+  assert.strictEqual(await eng.updateRecord(VINYL, "Music/Vinyl/T.md"), false, "a second update changes nothing");
 });
 
 test("a note in the wrong base is moved to the right one and retagged, keeping what the user wrote", async () => {
@@ -410,11 +505,20 @@ test("tokens are kept in Obsidian's secret storage, never in a file", async () =
   const { p, files, secrets } = await makePlugin(undefined);
   p.saveToken("discogs", "  abc123 ");
   assert.strictEqual(p.token("discogs"), "abc123");
-  assert.strictEqual(secrets.get("music-library-sync-discogs-token"), "abc123");
+  assert.strictEqual(secrets.get("discogs-music-sync-discogs-token"), "abc123");
   assert.strictEqual(p.token("genius"), "");
   assert.deepStrictEqual([...files.values()].filter((f) => f.text !== null), [], "no file written");
   p.saveToken("discogs", "");
   assert.strictEqual(p.token("discogs"), "", "an empty token clears it");
+});
+
+test("tokens kept under the plugin's old ID (0.13–0.15) move to its new names in the keychain", async () => {
+  const v = makeVault();
+  v.app.secretStorage.setSecret("music-library-sync-discogs-token", "from-0.15");
+  const p = new Plugin(); p.app = v.app;
+  await p.onload();
+  assert.strictEqual(p.token("discogs"), "from-0.15");
+  assert.deepStrictEqual([...v.secrets.keys()], ["discogs-music-sync-discogs-token"], "the old entry is gone from the keychain");
 });
 
 test("tokens that 0.11 and 0.12 kept in local storage move to secret storage", async () => {

@@ -2,10 +2,11 @@
 // each table column shows. The views are the ones the .base files used to provide. No Obsidian
 // dependency, so it is tested directly; views.js draws the result.
 
-import { kr } from "./report.js";
+import { formatMoney } from "./currency.js";
 
 const text = (v) => (v === null || v === undefined ? "" : String(v));
-const money = (v) => (v === null || v === undefined ? "" : kr(v));
+// each record in the currency its prices were fetched in
+const money = (r, k) => (r[k] === null || r[k] === undefined ? "" : formatMoney(r[k], r.currency));
 
 // Every column a table view can show: its heading, how a record fills it, and whether it's a number.
 const COLUMNS = {
@@ -21,11 +22,11 @@ const COLUMNS = {
   media: { label: "Base", get: (r) => r.media },
   mediaCondition: { label: "Media", get: (r) => r.mediaCondition },
   sleeveCondition: { label: "Sleeve", get: (r) => r.sleeveCondition },
-  low: { label: "Low G+", get: (r) => money(r.low), num: true },
-  mid: { label: "Mid VG+", get: (r) => money(r.mid), num: true },
-  high: { label: "High NM", get: (r) => money(r.high), num: true },
-  myCopy: { label: "My copy", get: (r) => money(r.myCopy), num: true },
-  list: { label: "Lowest listing", get: (r) => money(r.list), num: true },
+  low: { label: "Low G+", get: (r) => money(r, "low"), num: true },
+  mid: { label: "Mid VG+", get: (r) => money(r, "mid"), num: true },
+  high: { label: "High NM", get: (r) => money(r, "high"), num: true },
+  myCopy: { label: "My copy", get: (r) => money(r, "myCopy"), num: true },
+  list: { label: "Lowest listing", get: (r) => money(r, "list"), num: true },
   forSale: { label: "For sale", get: (r) => text(r.forSale), num: true },
   checked: { label: "Checked", get: (r) => r.checked },
 };

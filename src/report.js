@@ -3,6 +3,7 @@
 // tracklist, the figures are computed here, and the charts are drawn here. Nothing in this file
 // touches Obsidian, so it is tested directly.
 import { CONTAINERS } from "./bases.js";
+import { DEFAULT_CURRENCY, LEGACY_CURRENCY, currencyCode, formatMoney, formatNumber, currencySymbol, currencyScale } from "./currency.js";
 
 /* ------------------------------------------------------------------ decoding */
 
@@ -34,6 +35,10 @@ function primaryFormat(format, media) {
 // A cover property ("[[123.jpeg]]") as the linked file's name.
 const linkTarget = (v) => text(v).replace(/^\[\[|\]\]$/g, "").split("|")[0];
 
+// A price property, or its name before 0.16 with _sek on the end.
+const OLD_PRICE_NAMES = ["price_low", "price_mid", "price_high", "price_max", "price_my_copy", "market_lowest"];
+const price = (fm, k) => num(fm[k]) ?? num(fm[`${k}_sek`]);
+
 // One record note: its frontmatter, the name of the base it belongs to, its text and its path.
 function decodeRecord(fm, media, body, fallbackTitle, path = "") {
   return {
@@ -41,13 +46,15 @@ function decodeRecord(fm, media, body, fallbackTitle, path = "") {
     label: text(fm.label), catno: text(fm.catno), country: text(fm.country), format: text(fm.format), cover: linkTarget(fm.cover),
     discogsFormat: primaryFormat(fm.format, fm.media),
     mediaCondition: text(fm.media_condition), sleeveCondition: text(fm.sleeve_condition),
-    purchased: day(fm.purchased), forSale: num(fm.market_for_sale), myCopy: num(fm.price_my_copy_sek), checked: day(fm.price_checked),
+    purchased: day(fm.purchased), forSale: num(fm.market_for_sale), myCopy: price(fm, "price_my_copy"), checked: day(fm.price_checked),
     releaseYear: num(fm.year), originalYear: num(fm.original_year),
     compilation: /\bcompilation\b/i.test(text(fm.format)),
     // Only what Discogs calls the pressing: a later year alone is often a first pressing in another country.
     reissue: /\b(reissue|repress|remaster(ed)?)\b/i.test(text(fm.format)),
-    low: num(fm.price_low_sek), mid: num(fm.price_mid_sek), high: num(fm.price_high_sek),
-    max: num(fm.price_max_sek) ?? num(fm.price_high_sek), list: num(fm.market_lowest_sek),
+    low: price(fm, "price_low"), mid: price(fm, "price_mid"), high: price(fm, "price_high"),
+    max: price(fm, "price_max") ?? price(fm, "price_high"), list: price(fm, "market_lowest"),
+    // the currency the prices are in: stated since 0.16, kronor before (properties ending in _sek)
+    currency: currencyCode(fm.price_currency) || (OLD_PRICE_NAMES.some((k) => num(fm[`${k}_sek`]) !== null) ? LEGACY_CURRENCY : ""),
     year: num(fm.original_year) || num(fm.year), added: day(fm.purchased) || day(fm.added_to_discogs),
     genres: list(fm.genres), styles: list(fm.styles), shop: text(fm.shop),
     listened: fm.listened === true,
@@ -55,9 +62,9 @@ function decodeRecord(fm, media, body, fallbackTitle, path = "") {
   };
 }
 
-// Music/.vinyl-sync/collection-value.json → Discogs' own value of the collection.
+// Discogs' own value of the collection, as the plugin keeps it, with the currency it is in.
 function decodeCollectionValue(json) {
-  return { min: num(json?.discogs_value_min), med: num(json?.discogs_value_median), max: num(json?.discogs_value_max) };
+  return { min: num(json?.discogs_value_min), med: num(json?.discogs_value_median), max: num(json?.discogs_value_max), currency: currencyCode(json?.currency) };
 }
 
 /* ------------------------------------------------------------------ colours */
@@ -128,7 +135,6 @@ function palette(theme, colours = {}) {
 /* ------------------------------------------------------------------ formatting */
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const kr = (v) => (v === null || v === undefined ? "—" : `${Math.round(v).toLocaleString("sv-SE")} kr`);
 const int = (v) => Math.round(v).toLocaleString("sv-SE");
 const pct = (v) => (v < 0.01 ? "<1%" : `${Math.round(v * 100)}%`);
 const sum = (arr, k) => arr.reduce((a, r) => a + (r[k] || 0), 0);
@@ -286,7 +292,15 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
   const listenBox = (r) => `<input type="checkbox" class="mls-listen" data-path="${esc(r.path)}" aria-label="Mark ${esc(r.title)} as listened to">`;
   const baseColours = P.bases(media.length);
   const MC = Object.fromEntries(media.map((m, i) => [m, baseColours[i]]));
-  const recs = records.filter((r) => media.includes(r.media));
+  const cur = currencyCode(options.currency) || DEFAULT_CURRENCY, sym = currencySymbol(cur);
+  const money = (v) => formatMoney(v, cur);
+  // Prices in another currency (fetched before the currency was changed) are left out of the figures
+  // until Refresh prices fetches them again; Needs attention lists the records.
+  const PRICED = ["low", "mid", "high", "max", "myCopy", "list"];
+  const elsewhere = (r) => r.currency && r.currency !== cur && PRICED.some((k) => r[k] !== null);
+  const recs = records.filter((r) => media.includes(r.media))
+    .map((r) => (elsewhere(r) ? { ...r, ...Object.fromEntries(PRICED.map((k) => [k, null])), otherCurrency: r.currency } : r));
+  const val = value.currency && value.currency !== cur ? { min: null, med: null, max: null } : value;
   const pill = (m) => `<span class="pill" style="background:${MC[m]};color:${P.ink(MC[m])}">${esc(m)}</span>`;
   const note = (t) => `<p class="note">${esc(t)}</p>`;
   const haveSugg = recs.some((r) => r.mid !== null);
@@ -295,9 +309,9 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
 
   const build = {
     overview() {
-      const highest = (g, isTotal) => (g.some((r) => r.max !== null) ? kr(sum(g, "max")) : isTotal && value.max !== null ? `${kr(value.max)} *` : "—");
+      const highest = (g, isTotal) => (g.some((r) => r.max !== null) ? money(sum(g, "max")) : isTotal && val.max !== null ? `${money(val.max)} *` : "—");
       const ovRow = (label, g, isTotal) => [esc(label), int(g.length), int(sum(g, "tracks")), `${Math.round(sum(g, "secs") / 3600)} h`,
-        kr(sum(g, "list")), highest(g, isTotal)];
+        money(sum(g, "list")), highest(g, isTotal)];
       return section("Overview", `${recs.length} records in ${media.length} base${media.length === 1 ? "" : "s"}: ${media.join(", ")}`,
         card("", table(["Media", "Records", "Tracks", "Playing time", "Lowest listings", "Highest"],
           [...media.map((m) => ovRow(m, recs.filter((r) => r.media === m))), ovRow("Total", recs, true)], [1, 2, 3, 4, 5], true)));
@@ -313,13 +327,13 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
           ...(media.length > 1 ? media.map((m) => ({ name: m, color: MC[m], values: months.map((mo) => upTo(recs.filter((r) => r.media === m), mo)) })) : []),
           { name: "All", color: P.fg, width: 3, values: months.map((mo) => upTo(recs, mo)) }] });
       }
-      const hist = [...(options.history || [])].filter((h) => h.med !== null).sort((a, b) => a.date.localeCompare(b.date));
+      const hist = [...(options.history || [])].filter((h) => h.med !== null && (currencyCode(h.currency) || LEGACY_CURRENCY) === cur).sort((a, b) => a.date.localeCompare(b.date));
       const worth = hist.length >= 2
-        ? lineChart(P, { labels: hist.map((h) => h.date), yTitle: "kr", money: true, series: [
+        ? lineChart(P, { labels: hist.map((h) => h.date), yTitle: sym, money: true, series: [
           { name: "High", color: P.distinct(3)[2], values: hist.map((h) => h.max) },
           { name: "Median", color: P.fg, width: 3, values: hist.map((h) => h.med) },
           { name: "Low", color: P.distinct(3)[1], values: hist.map((h) => h.min) }] })
-        : note(`Discogs' value of your collection is recorded with each sync${hist.length ? ` (so far: ${kr(hist[0].med)} on ${hist[0].date})` : ""}. The chart appears once there are two syncs on different days.`);
+        : note(`Discogs' value of your collection is recorded with each sync${hist.length ? ` (so far: ${money(hist[0].med)} on ${hist[0].date})` : ""}. The chart appears once there are two syncs on different days.`);
       return section("Growth over time", "Records owned at the end of each month (purchase date, else the date added to Discogs), and Discogs' value of the collection at each sync",
         card("Records owned", owned) + card("Collection value (Discogs)", worth));
     },
@@ -331,33 +345,34 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
         const vals = g.map((r) => r[VK]).filter((v) => v !== null).sort((a, b) => a - b);
         const q = (p) => (vals.length ? vals[Math.min(vals.length - 1, Math.floor(p * vals.length))] : null);
         const top = g.filter((r) => r[VK] !== null).sort((a, b) => b[VK] - a[VK]).slice(0, 20);
-        return [int(g.length), kr(q(0.25)), kr(q(0.5)), kr(q(0.75)), kr(vals.length ? vals[vals.length - 1] : null),
+        return [int(g.length), money(q(0.25)), money(q(0.5)), money(q(0.75)), money(vals.length ? vals[vals.length - 1] : null),
           sum(g, VK) ? pct(sum(top, VK) / sum(g, VK)) : "—"];
       };
       const formats = count(recs.map((r) => r.discogsFormat)).map(([f]) => f);
       const typicalCols = [...(formats.length > 1 ? formats.map((f) => [f, typical(recs.filter((r) => r.discogsFormat === f))]) : []), [formats.length > 1 ? "All" : formats[0] || "All", typical(recs)]];
       const typicalRows = ["Records", "Cheapest quarter are worth up to", "Median record", "Top quarter start at", "Most valuable record", "Share of value in the top 20 records"];
-      const bands = haveSugg
-        ? [[0, 50, "<50"], [50, 100, "50–100"], [100, 200, "100–200"], [200, 400, "200–400"], [400, 700, "400–700"], [700, 1000, "700–1 000"], [1000, 1e9, "1 000+"]]
-        : [[0, 25, "<25"], [25, 50, "25–50"], [50, 100, "50–100"], [100, 200, "100–200"], [200, 300, "200–300"], [300, 500, "300–500"], [500, 1e9, "500+"]];
+      // value bands, in kronor's steps scaled to the currency (50–100 kr, $5–10, ¥750–1,500)
+      const k = currencyScale(cur), bandText = (v) => formatNumber(v * k, cur);
+      const steps = haveSugg ? [50, 100, 200, 400, 700, 1000] : [25, 50, 100, 200, 300, 500];
+      const bands = [[0, steps[0] * k, `<${bandText(steps[0])}`], ...steps.slice(1).map((e, i) => [steps[i] * k, e * k, `${bandText(steps[i])}–${bandText(e)}`]), [steps[steps.length - 1] * k, 1e12, `${bandText(steps[steps.length - 1])}+`]];
       const inBand = (r, a, b) => r[VK] !== null && r[VK] >= a && r[VK] < b;
-      const valueAxis = haveSugg ? "Value per record (kr, Medium VG+)" : "Value per record (kr, cheapest listing)";
+      const valueAxis = haveSugg ? `Value per record (${sym}, Medium VG+)` : `Value per record (${sym}, cheapest listing)`;
       return section("Value spread", "How the value of your collection is spread across your records (Discogs data)",
         card("Whole collection", table(["", "Low", "Medium", "High"], [
-          ["Discogs collection value", kr(value.min), kr(value.med), kr(value.max)],
-          ...(haveSugg ? [["Sum of per-album estimates", kr(sum(recs, "low")), kr(sum(recs, "mid")), kr(sum(recs, "high"))]] : []),
+          ["Discogs collection value", money(val.min), money(val.med), money(val.max)],
+          ...(haveSugg ? [["Sum of per-album estimates", money(sum(recs, "low")), money(sum(recs, "mid")), money(sum(recs, "high"))]] : []),
         ], [1, 2, 3])) +
         card("A typical album, by format", table(["", ...typicalCols.map(([f]) => f)],
           typicalRows.map((label, i) => [esc(label), ...typicalCols.map(([, col]) => col[i])]), typicalCols.map((_, i) => i + 1))) +
         grid(
-          card("Records by value (kr)", barChart(P, { labels: bands.map((b) => b[2]), xTitle: valueAxis, yTitle: "Number of records",
+          card(`Records by value (${sym})`, barChart(P, { labels: bands.map((b) => b[2]), xTitle: valueAxis, yTitle: "Number of records",
             series: media.map((m) => ({ name: m, color: MC[m], values: bands.map(([a, b]) => recs.filter((r) => r.media === m && inBand(r, a, b)).length) })) })),
-          card("Where the value sits (kr per value band)", barChart(P, { labels: bands.map((b) => b[2]), xTitle: valueAxis, yTitle: "Total value in band (kr)",
+          card(`Where the value sits (${sym} per value band)`, barChart(P, { labels: bands.map((b) => b[2]), xTitle: valueAxis, yTitle: `Total value in band (${sym})`,
             series: [{ name: "Total value", colors: P.scale(bands.length), values: bands.map(([a, b]) => recs.filter((r) => inBand(r, a, b)).reduce((t, r) => t + r[VK], 0)) }] })),
         ) +
         card(`Top 20 albums by value (${haveSugg ? "Medium, VG+" : "cheapest listing"})`, table(
           ["#", "Album", "Artist", "Media", "Lowest", ...(haveSugg ? ["Medium"] : []), "Highest"],
-          top20.map((r, n) => [n + 1, album(r), esc(r.artist), pill(r.media), kr(r.list), ...(haveSugg ? [kr(r.mid)] : []), kr(r.max)]),
+          top20.map((r, n) => [n + 1, album(r), esc(r.artist), pill(r.media), money(r.list), ...(haveSugg ? [money(r.mid)] : []), money(r.max)]),
           haveSugg ? [0, 4, 5, 6] : [0, 4, 5])) +
         `<div class="sub">Lowest = cheapest copy on Discogs now. Highest = Discogs' Mint price suggestion. * Total highest = Discogs' own collection maximum.</div>`);
     },
@@ -370,11 +385,11 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
       const above = recs.filter((r) => r.list !== null && r.mid) .map((r) => ({ r, ratio: r.list / r.mid })).filter((x) => x.ratio > 1)
         .sort((a, b) => b.ratio - a.ratio).slice(0, 10);
       return section("Market", "How easy each record is to find on Discogs today",
-        card("Rarest: fewest copies for sale", rarest.length ? table(["Album", "Artist", "Media", "For sale", valueLabel], rarest.map((r) => row(r, [int(r.forSale), kr(r[VK])])), [3, 4]) : note("No record has market data yet.")) +
+        card("Rarest: fewest copies for sale", rarest.length ? table(["Album", "Artist", "Media", "For sale", valueLabel], rarest.map((r) => row(r, [int(r.forSale), money(r[VK])])), [3, 4]) : note("No record has market data yet.")) +
         card("In demand: cheapest copy costs more than Discogs' VG+ estimate", above.length
-          ? table(["Album", "Artist", "Media", "Cheapest listing", "VG+ estimate", "Above estimate"], above.map(({ r, ratio }) => row(r, [kr(r.list), kr(r.mid), `+${Math.round((ratio - 1) * 100)}%`])), [3, 4, 5])
+          ? table(["Album", "Artist", "Media", "Cheapest listing", "VG+ estimate", "Above estimate"], above.map(({ r, ratio }) => row(r, [money(r.list), money(r.mid), `+${Math.round((ratio - 1) * 100)}%`])), [3, 4, 5])
           : note("No record is listed above its VG+ estimate right now.")) +
-        card("Easiest to replace: most copies for sale", common.length ? table(["Album", "Artist", "Media", "For sale", "Cheapest listing"], common.map((r) => row(r, [int(r.forSale), kr(r.list)])), [3, 4]) : note("No record has market data yet.")));
+        card("Easiest to replace: most copies for sale", common.length ? table(["Album", "Artist", "Media", "For sale", "Cheapest listing"], common.map((r) => row(r, [int(r.forSale), money(r.list)])), [3, 4]) : note("No record has market data yet.")));
     },
 
     contents() {
@@ -454,7 +469,8 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
     attention() {
       const checks = [
         ["No purchase date", (r) => !r.purchased], ["No shop", (r) => !r.shop], ["No original year", (r) => !r.originalYear],
-        ["No prices from Discogs", (r) => r.mid === null && r.list === null], ["No cover image", (r) => !r.cover], ["No genre", (r) => !r.genres.length],
+        ["No prices from Discogs", (r) => !r.otherCurrency && r.mid === null && r.list === null],
+        [`Prices in another currency than ${cur} (run Refresh prices)`, (r) => !!r.otherCurrency], ["No cover image", (r) => !r.cover], ["No genre", (r) => !r.genres.length],
       ];
       const rows = checks.map(([label, test]) => [label, recs.filter(test)]).filter(([, g]) => g.length);
       if (!rows.length) return section("Needs attention", "", card("", note("Nothing to fill in: every record has a purchase date, shop, original year, prices, cover and genre.")));
@@ -488,5 +504,5 @@ ${body}</div>
 </body></html>`;
 }
 
-export { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, esc, kr,
+export { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, esc,
   SECTIONS, COLOUR_MODES, FULL_BASES, DEFAULT_ACCENT };

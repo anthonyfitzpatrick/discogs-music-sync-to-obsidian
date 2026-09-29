@@ -1,4 +1,4 @@
-/* Discogs music sync and dashboard (plugin ID music-library-sync) — Wolf 359 Press.
+/* Discogs music sync and dashboard (plugin ID discogs-music-sync) — Wolf 359 Press.
    Pure JavaScript: talks to Discogs + Genius with Obsidian's requestUrl and writes notes
    through the vault adapter. No Python required.
    Safety: never overwrites an existing album note (except price fields on "Refresh prices").
@@ -22,12 +22,14 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "0.15.0";
+const VERSION = "0.16.0";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat } from "./bases.js";
 // Decoders for Discogs responses, applied where the responses arrive.
-import { decodeCollectionPage, decodeIdentity } from "./discogs.js";
+import { decodeCollectionPage, decodeIdentity, decodeProfileCurrency, decodeMoneyText } from "./discogs.js";
+// Currencies: the choices, how money is written, and the default until the account's is known.
+import { DEFAULT_CURRENCY, LEGACY_CURRENCY, currencyCode, currencyOptions, formatMoney } from "./currency.js";
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
 import { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, SECTIONS, COLOUR_MODES, FULL_BASES, DEFAULT_ACCENT } from "./report.js";
 // The plugin's own view — the Dashboard and Library tabs — in place of a dashboard note and .base files.
@@ -60,6 +62,8 @@ const DEFAULTS = { last: null, username: "", folder: DEFAULT_FOLDER, lyrics: tru
   valueHistory: [],                              // Discogs' value of the collection, one entry per day it was fetched
   sections: {},                                  // dashboard sections turned off: { key: false }
   autoBases: true,                               // a sync creates a base for each format that has none
+  currency: "",                                   // prices' currency; "" = the Discogs account's, set at the first sync or Test
+  rates: {},                                     // Discogs' exchange rates last measured: { "SEK>USD": { rate, date } }
   skippedFormats: [],                            // formats whose base the user stopped syncing: not created again
   colours: { mode: "theme", bases: {}, accent: DEFAULT_ACCENT } };   // bases: colour per base id, for Custom
 // Files versions before 0.11 kept in the vault, which the plugin no longer uses. Those versions always
@@ -69,9 +73,15 @@ const LEGACY_FILES = ["Music/Music Dashboard.md", "Music/All Media.base", "Music
   "Music/.vinyl-sync/collection-value.json", "Music/.vinyl-sync/last-export.html"];
 // Tokens live in Obsidian's secret storage on this device, which the operating system encrypts: never in a
 // file, so never in git. (Versions before 0.13 kept them in local storage, under the same names.)
-const TOKEN_KEYS = { discogs: "music-library-sync-discogs-token", genius: "music-library-sync-genius-token" };
+const TOKEN_KEYS = { discogs: "discogs-music-sync-discogs-token", genius: "discogs-music-sync-genius-token" };
+// Their names before 0.16, when the plugin's ID was music-library-sync: in the keychain from 0.13, and in
+// local storage in 0.11–0.12. Moved to the names above on loading.
+const OLD_TOKEN_KEYS = { discogs: "music-library-sync-discogs-token", genius: "music-library-sync-genius-token" };
 const ICONS = ["disc-3", "disc", "disc-2", "cassette-tape", "album", "music", "music-2", "radio", "headphones", "library", "guitar", "piano"];
-const PRICE_KEYS = ["price_low_sek", "price_mid_sek", "price_high_sek", "price_max_sek", "price_my_copy_sek", "market_lowest_sek", "market_for_sale", "price_checked"];
+// A record note's price properties. price_currency says which currency the amounts are in.
+const PRICE_KEYS = ["price_low", "price_mid", "price_high", "price_max", "price_my_copy", "market_lowest", "market_for_sale", "price_currency", "price_checked"];
+// Their names before 0.16, when every price was in kronor. Refresh prices replaces them with the above.
+const OLD_PRICE_KEYS = ["price_low_sek", "price_mid_sek", "price_high_sek", "price_max_sek", "price_my_copy_sek", "market_lowest_sek"];
 const GRADE = { low: "Good Plus (G+)", mid: "Very Good Plus (VG+)", high: "Near Mint (NM or M-)" };
 
 /* ------------------------------------------------------------------ helpers */
@@ -103,6 +113,27 @@ const artistOk = (want, got) => {
 };
 const titleOk = (got, want) => got === want || (Math.min(got.length, want.length) >= 6 && (got.startsWith(want) || want.startsWith(got)));
 const splitArtists = (a) => [a, ...String(a).split(/\s+(?:featuring|feat\.?|ft\.?|with|and|&)\s+|\s*[·,/]\s*/i)].map((x) => x.trim()).filter((x, i, arr) => x && x.toLowerCase() !== "various" && arr.indexOf(x) === i);
+
+// Sets properties in a note's frontmatter text (from the opening --- up to, not including, the closing
+// one). blocks: key → its lines (the "key: value" line, and any "  - item" lines under it). A key already
+// there is replaced where it stands, list lines included; a new one goes in before discogs_id. Every other
+// property, and the order, is kept.
+function setProperties(fm, blocks) {
+  const lines = fm.split("\n"), out = [], done = new Set();
+  for (let i = 0; i < lines.length; i++) {
+    const key = lines[i].match(/^([A-Za-z_][\w-]*):/)?.[1];
+    if (key && Object.hasOwn(blocks, key)) {
+      out.push(...blocks[key]); done.add(key);
+      while (i + 1 < lines.length && /^\s+\S/.test(lines[i + 1])) i++;       // its list lines
+      continue;
+    }
+    out.push(lines[i]);
+  }
+  const missing = Object.keys(blocks).filter((k) => !done.has(k)).flatMap((k) => blocks[k]);
+  const at = out.findIndex((l) => /^discogs_id:/.test(l));
+  out.splice(at < 0 ? out.length : at, 0, ...missing);
+  return out.join("\n");
+}
 
 /* ------------------------------------------------------------------ files */
 // The engine's file access, through Obsidian's Vault API rather than straight to disk, so Obsidian's
@@ -144,7 +175,7 @@ class Engine {
   constructor(adapter, log, isCancelled, cfg) {
     this.fs = adapter; this.log = log; this.isCancelled = isCancelled || (() => false);
     // cfg: also discogsToken and geniusToken, handed over by the plugin
-    this.cfg = Object.assign({ username: "", folder: DEFAULT_FOLDER, lyrics: true, gallery: true, libraries: [], discogsToken: "", geniusToken: "" }, cfg);
+    this.cfg = Object.assign({ username: "", folder: DEFAULT_FOLDER, lyrics: true, gallery: true, libraries: [], discogsToken: "", geniusToken: "", currency: "", rates: {} }, cfg);
     this.last = { discogs: 0, genius: 0 };
     this.noSuggest = false;
   }
@@ -241,21 +272,76 @@ class Engine {
     return rows.join("\n");
   }
 
+  /* ---- currencies ---- */
+  // The currency prices are kept in (the one chosen in settings, else the Discogs account's), and the
+  // account's own: Discogs gives price suggestions and the collection's value only in the account's.
+  async currencies() {
+    if (this.cur) return this.cur;
+    let account = "";
+    try { account = decodeProfileCurrency(await this.discogs(`users/${encodeURIComponent(this.cfg.username)}`)); }
+    catch (e) { this.log(`  (couldn't read your Discogs account's currency: ${e.message})`); }
+    const target = currencyCode(this.cfg.currency) || account || DEFAULT_CURRENCY;
+    this.cur = { target, account: account || target };
+    if (!currencyCode(this.cfg.currency)) { this.cfg.currency = target; this.cfg.onCurrency?.(target); }
+    if (target !== this.cur.account) this.log(`Prices in ${target}, converted from your Discogs account's ${this.cur.account} at Discogs' rates`);
+    return this.cur;
+  }
+  // How much one unit of the account's currency is worth in the target currency, as Discogs converts it:
+  // the same release's cheapest listing asked for in both. Measured once a run, from the first release
+  // that has a listing, and kept between runs (cfg.rates) for when none does.
+  async rate(releaseId, targetLowest) {
+    const { target, account } = await this.currencies();
+    if (target === account) return 1;
+    const key = `${account}>${target}`;
+    if (this.fresh?.[key]) return this.fresh[key];
+    if (releaseId && targetLowest) {
+      try {
+        const st = await this.discogs(`marketplace/stats/${releaseId}?curr_abbr=${account}`);
+        const there = st?.lowest_price?.value;
+        if (there > 0) {
+          const r = targetLowest / there;
+          this.fresh = { ...this.fresh, [key]: r };
+          this.cfg.rates[key] = { rate: r, date: today() };
+          return r;
+        }
+      } catch (e) { this.log(`  exchange rate: ${e.message}`); }
+    }
+    return this.cfg.rates[key]?.rate ?? null;
+  }
+  // A rate when no release is at hand (a value refresh on its own): tried on the first few releases.
+  async anyRate() {
+    const { target, account } = await this.currencies();
+    if (target === account) return 1;
+    const key = `${account}>${target}`;
+    if (this.fresh?.[key]) return this.fresh[key];
+    const items = this.items || decodeCollectionPage(await this.discogs(`users/${this.cfg.username}/collection/folders/0/releases?per_page=10&page=1`)).items;
+    for (const item of items.slice(0, 10)) {
+      const st = await this.discogs(`marketplace/stats/${item.id}?curr_abbr=${target}`).catch(() => null);
+      if (st?.lowest_price?.value > 0) { const r = await this.rate(item.id, st.lowest_price.value); if (this.fresh?.[key]) return r; }
+    }
+    return this.cfg.rates[key]?.rate ?? null;
+  }
+
   async prices(releaseId, myCondition) {
     const out = Object.fromEntries(PRICE_KEYS.map((k) => [k, ""]));
+    const { target } = await this.currencies();
+    let lowest = null;
     try {
-      const st = await this.discogs(`marketplace/stats/${releaseId}?curr_abbr=SEK`);
-      if (st?.lowest_price?.value != null) out.market_lowest_sek = Math.round(st.lowest_price.value);
+      const st = await this.discogs(`marketplace/stats/${releaseId}?curr_abbr=${target}`);
+      if (st?.lowest_price?.value != null) { lowest = st.lowest_price.value; out.market_lowest = Math.round(lowest); }
       out.market_for_sale = st?.num_for_sale ?? "";
     } catch (e) { this.log(`  stats: ${e.message}`); }
     if (!this.noSuggest) {
       try {
         const s = await this.discogs(`marketplace/price_suggestions/${releaseId}`);
-        const v = (g) => (s[g] ? Math.round(s[g].value) : "");
-        out.price_low_sek = v(GRADE.low); out.price_mid_sek = v(GRADE.mid); out.price_high_sek = v(GRADE.high); out.price_max_sek = v("Mint (M)");
-        if (myCondition) out.price_my_copy_sek = v(myCondition);
+        const rate = await this.rate(releaseId, lowest);
+        if (rate === null) this.log("  (no exchange rate yet, so no price suggestions for this record: Refresh prices adds them)");
+        const v = (g) => (s[g] && rate !== null ? Math.round(s[g].value * rate) : "");
+        out.price_low = v(GRADE.low); out.price_mid = v(GRADE.mid); out.price_high = v(GRADE.high); out.price_max = v("Mint (M)");
+        if (myCondition) out.price_my_copy = v(myCondition);
       } catch { this.noSuggest = true; this.log("  (price suggestions need Discogs Seller Settings — skipping)"); }
     }
+    out.price_currency = target;
     out.price_checked = today();
     return out;
   }
@@ -284,7 +370,7 @@ class Engine {
       for (const lib of added) { libs.push(lib); this.log(`+ New base ${lib.name} for ${lib.formats.join(", ")} records → ${lib.dir}`); }
       for (const why of skipped) this.log(`⚠ No base created for ${why}`);
     }
-    const fieldMap = Object.fromEntries(((await this.discogs(`users/${this.cfg.username}/collection/fields`)).fields || []).map((x) => [x.id, x.name]));
+    const fieldMap = await this.fieldMap();
 
     // 1. every record goes to the base that takes its format; the rest are reported, never guessed
     const placed = new Map(libs.map((l) => [l.id, []])), unplaced = new Map();
@@ -302,7 +388,7 @@ class Engine {
     for (const l of libs) {
       await this.ensureDir(l.dir); await this.ensureDir(`${l.dir}/covers`);
       for (const p of await this.listNotes(l.dir)) {
-        const inst = (await this.fs.read(p)).match(/^discogs_instance:\s*(\d+)/m)?.[1];
+        const inst = (await this.fs.read(p)).match(/^discogs_instance:[ \t]*(\d+)/m)?.[1];
         if (inst) where.set(inst, { path: p, lib: l });
       }
     }
@@ -361,24 +447,54 @@ class Engine {
     await this.fs.rename(path, dest);
   }
 
+  // The release's original year, from its master release.
+  async masterYear(rel) {
+    if (!rel.master_id) return "";
+    try { return (await this.discogs(`masters/${rel.master_id}`)).year || ""; } catch (e) { this.log(`  original year: ${e.message}`); return ""; }
+  }
+  // The front cover, saved in the base's covers folder unless it is there already: its file name, or "".
+  async saveCover(T, rel) {
+    const imgs = rel.images || [];
+    const img = imgs.find((x) => x.type === "primary") || imgs[0];
+    if (!img?.uri) return "";
+    const ext = (img.uri.split("?")[0].match(/\.(jpe?g|png|gif|webp)$/i)?.[0] || ".jpg").toLowerCase();
+    const cover = `${rel.id}${ext}`, dest = `${T.dir}/covers/${cover}`;
+    if (await this.fs.exists(dest)) return cover;
+    await this.ensureDir(`${T.dir}/covers`);
+    try { await this.fs.writeBinary(dest, await this.discogs(img.uri, true)); return cover; }
+    catch (e) { this.log(`  cover failed: ${e.message}`); return ""; }
+  }
+  // The properties that come from Discogs, as frontmatter blocks (see setProperties). A new note is made
+  // of these; Update record replaces only these, so what the user fills in is never touched.
+  discogsProperties(rel, masterYear, cond, added) {
+    const artist = artistsStr(rel.artists);
+    const lab = (rel.labels || [{}])[0];
+    const fmts = rel.formats || [];
+    const fmtS = fmts.map((x) => `${x.qty || "1"}x ${x.name}` + (x.descriptions?.length ? ", " + x.descriptions.join(", ") : "")).join("; ");
+    return {
+      artist: [`artist: ${q(artist)}`], title: [`title: ${q(rel.title)}`], year: [`year: ${rel.year || ""}`],
+      original_year: [`original_year: ${masterYear || rel.year || ""}`],
+      genres: ["genres:", ...(rel.genres || []).map((g) => `  - ${q(g)}`)],
+      styles: ["styles:", ...(rel.styles || []).map((g) => `  - ${q(g)}`)],
+      label: [`label: ${q(cleanName(lab.name))}`], catno: [`catno: ${q(lab.catno)}`], country: [`country: ${q(rel.country)}`],
+      format: [`format: ${q(fmtS)}`], media: [`media: ${q(fmts[0]?.name || "")}`],
+      media_condition: [`media_condition: ${q(cond["Media Condition"] || "")}`], sleeve_condition: [`sleeve_condition: ${q(cond["Sleeve Condition"] || "")}`],
+      added_to_discogs: [`added_to_discogs: ${added}`], discogs_url: [`discogs_url: ${q(rel.uri || "")}`],
+    };
+  }
+  // The user's own fields for a copy (conditions, notes), by name.
+  fields(item, fieldMap) { return Object.fromEntries(item.notes.map((n) => [fieldMap[n.field_id] || n.field_id, n.value])); }
+  async fieldMap() {
+    this.fieldNames ??= Object.fromEntries(((await this.discogs(`users/${this.cfg.username}/collection/fields`)).fields || []).map((x) => [x.id, x.name]));
+    return this.fieldNames;
+  }
+
   /* ---- one new record note ---- */
   async createNote(T, item, fieldMap) {
     const rel = await this.discogs(`releases/${item.id}`);
-    let masterYear = "";
-    if (rel.master_id) { try { masterYear = (await this.discogs(`masters/${rel.master_id}`)).year || ""; } catch (e) { this.log(`  original year: ${e.message}`); } }
-    // cover
-    let cover = "";
+    const masterYear = await this.masterYear(rel);
+    const cover = await this.saveCover(T, rel);
     const imgs = rel.images || [];
-    const img = imgs.find((x) => x.type === "primary") || imgs[0];
-    if (img?.uri) {
-      const ext = (img.uri.split("?")[0].match(/\.(jpe?g|png|gif|webp)$/i)?.[0] || ".jpg").toLowerCase();
-      cover = `${rel.id}${ext}`;
-      const dest = `${T.dir}/covers/${cover}`;
-      if (!(await this.fs.exists(dest))) {
-        try { await this.fs.writeBinary(dest, await this.discogs(img.uri, true)); }
-        catch (e) { this.log(`  cover failed: ${e.message}`); cover = ""; }
-      }
-    }
     // every other image Discogs has (back, labels, inner sleeves…)
     const gallery = [];
     if (this.cfg.gallery) await this.ensureDir(`${T.dir}/images`);
@@ -391,25 +507,20 @@ class Engine {
       }
       gallery.push(fn);
     }
-    const cond = Object.fromEntries(item.notes.map((n) => [fieldMap[n.field_id] || n.field_id, n.value]));
+    const cond = this.fields(item, fieldMap);
     const pr = await this.prices(rel.id, cond["Media Condition"] || "");
     const artist = artistsStr(rel.artists);
-    const lab = (rel.labels || [{}])[0];
-    const fmts = rel.formats || [];
-    const fmtS = fmts.map((x) => `${x.qty || "1"}x ${x.name}` + (x.descriptions?.length ? ", " + x.descriptions.join(", ") : "")).join("; ");
+    const d = this.discogsProperties(rel, masterYear, cond, item.added);
     const fm = [
       "---",
-      `artist: ${q(artist)}`, `title: ${q(rel.title)}`, `year: ${rel.year || ""}`, `original_year: ${masterYear || rel.year || ""}`,
-      "genres:", ...(rel.genres || []).map((g) => `  - ${q(g)}`),
-      "styles:", ...(rel.styles || []).map((g) => `  - ${q(g)}`),
-      `label: ${q(cleanName(lab.name))}`, `catno: ${q(lab.catno)}`, `country: ${q(rel.country)}`,
-      `format: ${q(fmtS)}`, `media: ${q(fmts[0]?.name || "")}`,
+      ...d.artist, ...d.title, ...d.year, ...d.original_year, ...d.genres, ...d.styles,
+      ...d.label, ...d.catno, ...d.country, ...d.format, ...d.media,
       `cover: ${cover ? q(`[[${cover}]]`) : ""}`,
-      `media_condition: ${q(cond["Media Condition"] || "")}`, `sleeve_condition: ${q(cond["Sleeve Condition"] || "")}`,
-      "purchased: ", `shop: ""`, "price_paid_sek: ",
+      ...d.media_condition, ...d.sleeve_condition,
+      "purchased: ", `shop: ""`, "price_paid: ",
       ...PRICE_KEYS.map((k) => `${k}: ${pr[k]}`),
-      `added_to_discogs: ${item.added}`,
-      `discogs_id: ${rel.id}`, `discogs_instance: ${item.instance}`, `discogs_url: ${q(rel.uri || "")}`,
+      ...d.added_to_discogs,
+      `discogs_id: ${rel.id}`, `discogs_instance: ${item.instance}`, ...d.discogs_url,
       "cssclasses:", "  - vinyl-record",
       "tags:", `  - ${T.tag}`,
       "---",
@@ -426,6 +537,48 @@ class Engine {
     this.log(`  + ${artist} – ${rel.title}`);
   }
 
+  /* ---- one record, brought up to date with Discogs ---- */
+  // Replaces the note's Discogs properties (details, conditions, prices), its tracklist (adding lyrics
+  // links if they are on) and a missing cover, from Discogs as it is now. Everything the user fills in
+  // (purchased, shop, price paid, listened, tags) and writes (Notes, anywhere outside the tracklist) is
+  // kept. Returns what changed, for the notice.
+  async updateRecord(T, path) {
+    const text = await this.fs.read(path);
+    const end = text.indexOf("\n---", 3);
+    if (!text.startsWith("---") || end < 0) throw new Error("This note has no properties, so it isn't a record note");
+    const id = text.slice(0, end).match(/^discogs_id:[ \t]*(\d+)/m)?.[1], instance = text.slice(0, end).match(/^discogs_instance:[ \t]*(\d+)/m)?.[1];
+    if (!id) throw new Error("This note has no discogs_id, so it can't be matched to Discogs");
+    const rel = await this.discogs(`releases/${id}`);
+    const masterYear = await this.masterYear(rel);
+    // this copy in the collection, for its conditions and date added
+    const copies = decodeCollectionPage(await this.discogs(`users/${this.cfg.username}/collection/releases/${id}`)).items;
+    const item = copies.find((c) => c.instance === instance) || copies[0];
+    if (!item) throw new Error("This record is no longer in your Discogs collection");
+    const cond = this.fields(item, await this.fieldMap());
+    const pr = await this.prices(rel.id, cond["Media Condition"] || "");
+    const hadCover = /^cover:[ \t]*\S/m.test(text.slice(0, end));
+    const cover = hadCover ? "" : await this.saveCover(T, rel);
+    const table = await this.tracklist(rel);
+    const blocks = { ...this.discogsProperties(rel, masterYear, cond, item.added), ...Object.fromEntries(PRICE_KEYS.map((k) => [k, [`${k}: ${pr[k]}`]])) };
+    if (cover) blocks.cover = [`cover: ${q(`[[${cover}]]`)}`];
+    let changed = false;
+    await this.fs.process(path, (now) => {
+      const e = now.indexOf("\n---", 3);
+      if (!now.startsWith("---") || e < 0) return now;
+      let fm = setProperties(now.slice(0, e), blocks);
+      fm = fm.replace(/^price_paid_sek:/m, "price_paid:");
+      for (const k of OLD_PRICE_KEYS) fm = fm.replace(new RegExp(`^${k}:.*\\n?`, "m"), "");
+      let body = now.slice(e);
+      // the tracklist section, up to the next heading, is the plugin's own: it is rebuilt
+      body = body.replace(/(\n## Tracklist\n)[\s\S]*?(?=\n## |$)/, (_m, head) => `${head}\n<!-- tracklist v2 --><!-- g2 -->\n${table}\n`);   // a function, so a "$" in a title is kept as it is
+      if (cover && !/!\[\[[^\]]+\|300\]\]/.test(body)) body = body.replace(/(\n# [^\n]*\n)/, (_m, head) => `${head}\n![[${cover}|300]]\n`);
+      changed = fm + body !== now;
+      return fm + body;
+    });
+    this.log(`  ↻ ${artistsStr(rel.artists)} – ${rel.title}${changed ? "" : " (already up to date)"}`);
+    return changed;
+  }
+
   /* ---- refresh price fields only ---- */
   async refreshPrices(T, onProgress) {
     const notes = await this.listNotes(T.dir);
@@ -436,8 +589,8 @@ class Engine {
       const text = await this.fs.read(p);
       const end = text.indexOf("\n---", 3);
       if (!text.startsWith("---") || end < 0) continue;
-      const id = text.slice(0, end).match(/^discogs_id:\s*(\d+)/m)?.[1]; if (!id) continue;
-      const mc = text.slice(0, end).match(/^media_condition:\s*"?([^"\n]*)"?/m)?.[1]?.trim() || "";
+      const id = text.slice(0, end).match(/^discogs_id:[ \t]*(\d+)/m)?.[1]; if (!id) continue;
+      const mc = text.slice(0, end).match(/^media_condition:[ \t]*"?([^"\n]*)"?/m)?.[1]?.trim() || "";
       const pr = await this.prices(id, mc);
       // The prices go into the note as it is now: it may have been edited while Discogs was answering.
       let changed = false;
@@ -445,6 +598,9 @@ class Engine {
         const e = now.indexOf("\n---", 3);
         if (!now.startsWith("---") || e < 0) return now;
         let fm = now.slice(0, e);
+        // price properties from before 0.16 (kronor) give way to the new ones; what the user paid keeps its value
+        fm = fm.replace(/^price_paid_sek:/m, "price_paid:");
+        for (const k of OLD_PRICE_KEYS) fm = fm.replace(new RegExp(`^${k}:.*\\n?`, "m"), "");
         for (const k of PRICE_KEYS) {
           const line = `${k}: ${pr[k]}`, re = new RegExp(`^${k}:.*$`, "m");
           fm = re.test(fm) ? fm.replace(re, line) : fm.replace(/^(discogs_id:)/m, `${line}\n$1`);
@@ -460,11 +616,14 @@ class Engine {
   }
 
   /* ---- Discogs' own value of the whole collection, for the dashboard: { min, med, max, checked } ---- */
+  // Discogs sends it in the account's currency; it is converted like the price suggestions.
   async collectionValue() {
     const r = await this.discogs(`users/${this.cfg.username}/collection/value`);
-    const n = (x) => { const v = Math.round(parseFloat(String(x ?? "").replace(/[^0-9.]/g, ""))); return Number.isFinite(v) ? v : null; };
-    const value = { min: n(r?.minimum), med: n(r?.median), max: n(r?.maximum), checked: today() };
-    this.log(`Collection value: ${value.med === null ? "not available" : `median ${value.med} kr`}`);
+    const { target } = await this.currencies();
+    const rate = await this.anyRate();
+    const n = (x) => { const v = decodeMoneyText(x); return v === null || rate === null ? null : Math.round(v * rate); };
+    const value = { min: n(r?.minimum), med: n(r?.median), max: n(r?.maximum), currency: target, checked: today() };
+    this.log(`Collection value: ${value.med === null ? "not available" : `median ${formatMoney(value.med, target)}`}`);
     return value;
   }
 }
@@ -510,6 +669,10 @@ class MusicLibrarySync extends Plugin {
     this.data = Object.assign(structuredClone(DEFAULTS), saved);
     if (!Array.isArray(this.data.libraries)) this.data.libraries = [];
     if (!Array.isArray(this.data.skippedFormats)) this.data.skippedFormats = [];
+    // Before 0.16 every price was in kronor, so an install from then keeps kronor until the user chooses.
+    if (saved && saved.currency === undefined && (this.data.libraries.length || this.data.value)) this.data.currency = LEGACY_CURRENCY;
+    this.data.currency = currencyCode(this.data.currency);
+    if (!this.data.rates || Array.isArray(this.data.rates)) this.data.rates = {};
     this.data.folder = cleanFolder(this.data.folder) || DEFAULT_FOLDER;
     // Before 0.10 a base synced a Discogs folder. The folders were named after their formats (Vinyl,
     // CD, Cassette), which are Discogs' own spellings, so each becomes the format its base takes.
@@ -534,6 +697,16 @@ class MusicLibrarySync extends Plugin {
     this.addCommand({ id: "cancel", name: "Cancel running sync", callback: () => (this.cancelled = true) });
     this.addCommand({ id: "export-pdf", name: "Export dashboard as PDF…", callback: () => new ExportModal(this.app, this).open() });
     this.addCommand({ id: "add-base", name: "Add a base…", callback: () => new LibraryModal(this.app, this, null).open() });
+    this.addCommand({ id: "update-record", name: "Update this record from Discogs", checkCallback: (checking) => {
+      const file = this.app.workspace.getActiveFile();
+      if (!this.baseOfNote(file)) return false;
+      if (!checking) void this.updateRecord(file);
+      return true;
+    } });
+    // the same, from a record note's menu (right-click, or the note's ⋯ menu)
+    this.registerEvent(this.app.workspace.on("file-menu", (menu, file) => {
+      if (this.baseOfNote(file)) menu.addItem((i) => i.setTitle("Update from Discogs").setIcon("refresh-cw").onClick(() => void this.updateRecord(file)));
+    }));
     this.addSettingTab(new MusicSettingTab(this.app, this));
     this.registerInterval(window.setInterval(() => this.refresh(), 60 * 1000));
     // The views follow the notes: redraw shortly after record notes change, move or go, and on theme changes.
@@ -560,13 +733,19 @@ class MusicLibrarySync extends Plugin {
     for (const leaf of this.musicLeaves()) leaf.view?.render?.().catch?.((e) => console.error(e));
   }
   baseNames() { return this.data.libraries.map((l) => l.name); }
-  // What the dashboard and PDF need besides the records: sections on or off, colours, value history.
+  // The currency prices are shown in: the one chosen, else (before the first sync has found the Discogs
+  // account's) the default.
+  currency() { return this.data.currency || DEFAULT_CURRENCY; }
+  // What the dashboard and PDF need besides the records: sections on or off, colours, value history, currency.
   reportOptions() {
     const c = this.data.colours;
-    return { sections: this.data.sections, history: this.data.valueHistory,
+    return { sections: this.data.sections, history: this.data.valueHistory, currency: this.currency(),
       colours: { mode: c.mode, accent: c.accent, bases: this.data.libraries.map((l) => c.bases[l.id]) } };
   }
-  collectionValue() { return decodeCollectionValue(this.data.value && { discogs_value_min: this.data.value.min, discogs_value_median: this.data.value.med, discogs_value_max: this.data.value.max }); }
+  collectionValue() {
+    const v = this.data.value;
+    return decodeCollectionValue(v && { discogs_value_min: v.min, discogs_value_median: v.med, discogs_value_max: v.max, currency: v.currency || LEGACY_CURRENCY });
+  }
   // A record's cover image, found the way Obsidian resolves the note's link to it.
   coverFile(record) { return record.cover ? this.app.metadataCache.getFirstLinkpathDest(record.cover, record.path) : null; }
   // Ticking Listened on the dashboard records it in the note's properties.
@@ -574,6 +753,35 @@ class MusicLibrarySync extends Plugin {
     const f = this.app.vault.getAbstractFileByPath(path);
     try { await this.app.fileManager.processFrontMatter(f, (fm) => { fm.listened = true; fm.listened_on = today(); }); }
     catch (e) { box.checked = false; new Notice(`Couldn't mark it as listened to: ${e.message}`); console.error(e); }
+  }
+
+  /* ---- one record ---- */
+  // The base a record note belongs to (by its tag), or null for any other file.
+  baseOfNote(file) {
+    const fm = file && this.app.metadataCache.getFileCache(file)?.frontmatter;
+    if (!fm?.discogs_id) return null;
+    const tags = [].concat(fm.tags ?? []).map((t) => String(t).replace(/^#/, "").toLowerCase());
+    return this.data.libraries.find((l) => tags.includes(l.tag.toLowerCase())) ?? null;
+  }
+  // Brings one record note up to date with Discogs (Engine.updateRecord), leaving what the user wrote.
+  async updateRecord(file) {
+    const lib = this.baseOfNote(file), d = this.data;
+    if (!lib) { new Notice("Open a record note from one of your bases first"); return; }
+    if (this.state.running || this.updating) { new Notice("Music sync is already running"); return; }
+    if (!d.username || !this.token("discogs")) { new Notice("Enter your Discogs username and token in settings first", 8000); return; }
+    this.updating = true;
+    const notice = new Notice(`Updating ${file.basename} from Discogs…`, 0);
+    const eng = new Engine(vaultFiles(this.app), () => {}, () => false, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: [],
+      discogsToken: this.token("discogs"), geniusToken: this.token("genius"), folder: d.folder,
+      currency: d.currency, rates: d.rates, onCurrency: (c) => { d.currency = c; } });
+    try {
+      await eng.init();
+      const changed = await eng.updateRecord(lib, file.path);
+      await this.saveData(d);
+      new Notice(changed ? `Updated ${file.basename} from Discogs` : `${file.basename} was already up to date`, 6000);
+      this.redrawViews();
+    } catch (e) { new Notice(`Couldn't update from Discogs: ${e.message}`, 10000); console.error(e); }
+    finally { notice.hide(); this.updating = false; }
   }
 
   /* ---- libraries ("bases") ---- */
@@ -688,10 +896,16 @@ class MusicLibrarySync extends Plugin {
   // Tokens kept in local storage by 0.11 and 0.12 move to secret storage, and leave local storage. Tokens
   // kept in files by earlier versions are read in once; the files are then offered for removal.
   async importTokenFiles() {
-    for (const [kind, key] of Object.entries(TOKEN_KEYS)) {
-      const t = String(this.app.loadLocalStorage(key) ?? "").trim();
-      if (!t) continue;
-      if (!this.token(kind)) this.saveToken(kind, t);
+    const store = this.app.secretStorage;
+    for (const [kind, key] of Object.entries(OLD_TOKEN_KEYS)) {
+      const kept = String(store.getSecret(key) ?? "").trim();                      // 0.13–0.15
+      if (kept) {
+        if (!this.token(kind)) this.saveToken(kind, kept);
+        if ("deleteSecret" in store) store.deleteSecret(key); else store.setSecret(key, "");
+      }
+      const local = String(this.app.loadLocalStorage(key) ?? "").trim();         // 0.11–0.12
+      if (!local) continue;
+      if (!this.token(kind)) this.saveToken(kind, local);
       this.app.saveLocalStorage(key, null);
     }
     for (const [kind, file] of [["discogs", "Music/.discogs-token"], ["genius", "Music/.genius-token"]]) {   // where versions before 0.11 kept them
@@ -722,6 +936,11 @@ class MusicLibrarySync extends Plugin {
     const r = await requestUrl({ url: "https://api.discogs.com/oauth/identity", headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
     if (r.status >= 400) throw new Error(r.status === 401 ? "Discogs didn't accept the token" : `Discogs answered ${r.status}`);
     return decodeIdentity(r.json);
+  }
+  // The currency the Discogs account prices in, or "" when Discogs doesn't say.
+  async discogsCurrency(username) {
+    const r = await requestUrl({ url: `https://api.discogs.com/users/${encodeURIComponent(username)}`, headers: { Authorization: `Discogs token=${this.token("discogs")}`, "User-Agent": UA }, throw: false });
+    return r.status < 400 ? decodeProfileCurrency(r.json) : "";
   }
   async geniusCheck() {
     const t = this.token("genius"); if (!t) throw new Error("No Genius token saved yet");
@@ -888,6 +1107,7 @@ class MusicLibrarySync extends Plugin {
     const d = this.data;
     const eng = new Engine(vaultFiles(this.app), log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs,
       discogsToken: this.token("discogs"), geniusToken: this.token("genius"), folder: d.folder,
+      currency: d.currency, rates: d.rates, onCurrency: (c) => { d.currency = c; },
       createBases: async (items) => { const r = await this.createBasesFor(items); s.stepList = this.steps(); this.refresh(); return r; } });
     const steps = mode === "dashboard" ? [] : libs;
     const work = () => steps.length + 1;                     // bases a sync creates add steps
@@ -919,7 +1139,7 @@ class MusicLibrarySync extends Plugin {
         // one entry per day, for the value-over-time chart; a later fetch the same day replaces it
         if (this.data.value.med !== null) {
           const h = this.data.valueHistory.filter((e) => e.date !== this.data.value.checked);
-          h.push({ date: this.data.value.checked, min: this.data.value.min, med: this.data.value.med, max: this.data.value.max });
+          h.push({ date: this.data.value.checked, min: this.data.value.min, med: this.data.value.med, max: this.data.value.max, currency: this.data.value.currency });
           this.data.valueHistory = h.sort((a, b) => a.date.localeCompare(b.date)).slice(-1000);
         }
         s.steps.dashboard = "done";
@@ -1085,7 +1305,9 @@ class MusicSettingTab extends PluginSettingTab {
             const who = await P.discogsIdentity();
             if (!d.username) { d.username = who; await P.save(); }          // shown when the check redraws the tab
             if (who.toLowerCase() !== d.username.toLowerCase()) throw new Error(`The token belongs to ${who}, but the username above is ${d.username}. Change one of them`);
-            return `Connected to Discogs as ${who}`;
+            // the account's currency becomes the prices' currency, unless one has been chosen
+            if (!d.currency) { const c = await P.discogsCurrency(who); if (c) { d.currency = c; await P.save(); } }
+            return `Connected to Discogs as ${who}${d.currency ? ` (prices in ${d.currency})` : ""}`;
           }) },
       ] },
       { type: "group", heading: "Lyrics", items: [
@@ -1143,6 +1365,11 @@ class MusicSettingTab extends PluginSettingTab {
         { name: "Accent", desc: "The starting colour for charts with many parts (genres, styles, artists, labels) and for value scales.", visible: custom,
           control: { type: "color", key: "accent", defaultValue: DEFAULT_ACCENT } },
       ] },
+      { type: "group", heading: "Prices", items: [
+        { name: "Currency", aliases: ["Money", "Prices", "SEK", "USD", "EUR", "GBP"],
+          desc: "Prices, values and charts are in this currency. It starts as your Discogs account's; Discogs converts the rest at its own rates. After changing it, run Refresh prices to update your records.",
+          control: { type: "dropdown", key: "currency", options: { "": "Same as my Discogs account", ...currencyOptions() } } },
+      ] },
       { type: "group", heading: "Sync", items: [
         { name: "Download all images", aliases: ["Covers", "Gallery"], desc: "On: save every Discogs photo of a new record (back cover, labels, inserts). Off: save only its front cover.",
           control: { type: "toggle", key: "gallery" } },
@@ -1176,6 +1403,7 @@ class MusicSettingTab extends PluginSettingTab {
       case "lyrics": return d.lyrics;
       case "gallery": return d.gallery;
       case "autoBases": return d.autoBases;
+      case "currency": return d.currency;
       case "colourMode": return d.colours.mode;
       case "accent": return d.colours.accent;
       case "pdfSize": return d.pdf.size;
@@ -1194,6 +1422,12 @@ class MusicSettingTab extends PluginSettingTab {
       case "lyrics": d.lyrics = value === true; break;
       case "gallery": d.gallery = value === true; break;
       case "autoBases": d.autoBases = value === true; break;
+      case "currency": {
+        const was = d.currency;
+        d.currency = currencyCode(value);
+        if (d.currency && was && d.currency !== was) new Notice(`Prices are now shown in ${d.currency}. Run Refresh prices to fetch your records' prices in ${d.currency}; until then, prices in ${was} are left out of the dashboard's figures.`, 12000);
+        break;
+      }
       case "colourMode": d.colours.mode = COLOUR_MODES[value] ? value : "theme"; break;
       case "accent": d.colours.accent = String(value); break;
       case "pdfSize": d.pdf.size = PAPER[value] ? value : "A4"; break;
@@ -1201,7 +1435,7 @@ class MusicSettingTab extends PluginSettingTab {
       default: return;
     }
     await P.save();
-    if (key.startsWith("section:") || key.startsWith("colour") || key === "accent") P.redrawViews();
+    if (key.startsWith("section:") || key.startsWith("colour") || key === "accent" || key === "currency") P.redrawViews();
     this.refreshStarted();                          // getting started, the setup button and the custom colours follow these values
   }
 

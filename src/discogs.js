@@ -1,6 +1,8 @@
 // Decoders for Discogs responses. Each checks a response once, where it arrives, and fails with a
 // reason instead of letting a malformed reply turn into an empty list or a misplaced record.
 
+import { currencyCode } from "./currency.js";
+
 const isText = (v) => v === String(v);
 const isWhole = (v) => Number.isInteger(v) && v > 0;
 
@@ -32,4 +34,15 @@ function decodeIdentity(json) {
   return name;
 }
 
-export { decodeCollectionPage, decodeIdentity };
+// GET users/{username} → the currency the account prices in ("SEK"), or "" when Discogs doesn't say
+// or names one the plugin doesn't know.
+function decodeProfileCurrency(json) { return currencyCode(json?.curr_abbr); }
+
+// A money amount as Discogs writes it in text ("SEK10,742.13", "$1,234.56", "€99.00") → 10742.13, or null.
+function decodeMoneyText(v) {
+  if (!isText(v)) return null;
+  const n = parseFloat(v.replace(/[^0-9.]/g, ""));
+  return Number.isFinite(n) ? n : null;
+}
+
+export { decodeCollectionPage, decodeIdentity, decodeProfileCurrency, decodeMoneyText };

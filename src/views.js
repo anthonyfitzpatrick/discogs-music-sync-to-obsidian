@@ -6,10 +6,11 @@ import { ItemView, setIcon } from "obsidian";
 import { reportParts } from "./report.js";
 import { COLUMNS, VIEWS, SORTS, SIZES, DEFAULT_SIZE, libraryGroups } from "./library.js";
 
-const MUSIC_VIEW = "music-library-sync-music";
+const MUSIC_VIEW = "discogs-music-sync-view";
 // View types of 0.11.0, when the dashboard and library were separate: still registered so tabs left
 // open in a workspace come back as the Music view on the matching tab.
-const OLD_VIEWS = { "music-library-sync-dashboard": "dashboard", "music-library-sync-library": "library" };
+// The Music view of 0.11.1–0.15 (the plugin's ID was music-library-sync then) reopens on the tab used last.
+const OLD_VIEWS = { "music-library-sync-dashboard": "dashboard", "music-library-sync-library": "library", "music-library-sync-music": "" };
 const TABS = [["dashboard", "Dashboard", "layout-dashboard"], ["library", "Library", "library"]];
 
 // Opens a record note from a click, in reading view: a new tab with Ctrl/Cmd, as Obsidian does for links.

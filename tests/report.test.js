@@ -2,7 +2,12 @@
 const { test } = require("node:test");
 const STYLES = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "styles.css"), "utf8");
 const assert = require("node:assert");
-const { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, SECTIONS, FULL_BASES } = require("../src/report.js");
+const reportModule = require("../src/report.js");
+const { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, tracklist, palette, SECTIONS, FULL_BASES } = reportModule;
+const { formatMoney, currencySymbol, currencyCode } = require("../src/currency.js");
+// These fixtures are notes from before 0.16, priced in kronor, so the report is drawn in kronor unless a test says otherwise.
+const buildReport = (records, media, value, theme, stamp, options = {}) => reportModule.buildReport(records, media, value, theme, stamp, { currency: "SEK", ...options });
+const reportParts = (records, media, value, theme, interactive, options = {}) => reportModule.reportParts(records, media, value, theme, interactive, { currency: "SEK", ...options });
 
 const THEME = { fg: "#33ff66", bg: "#0a0f06", muted: "#4fcc77", border: "#1a5530", font: "Monaco, monospace" };
 const BODY = `# A – B
@@ -36,8 +41,8 @@ test("a record is decoded from its frontmatter and tracklist", () => {
 });
 
 test("the collection value is decoded, with missing figures as null", () => {
-  assert.deepStrictEqual(decodeCollectionValue({ discogs_value_min: 100, discogs_value_median: 200, discogs_value_max: 300 }), { min: 100, med: 200, max: 300 });
-  assert.deepStrictEqual(decodeCollectionValue(null), { min: null, med: null, max: null });
+  assert.deepStrictEqual(decodeCollectionValue({ discogs_value_min: 100, discogs_value_median: 200, discogs_value_max: 300, currency: "eur" }), { min: 100, med: 200, max: 300, currency: "EUR" });
+  assert.deepStrictEqual(decodeCollectionValue(null), { min: null, med: null, max: null, currency: "" });
 });
 
 test("computed CSS colours become hex", () => {
@@ -125,7 +130,7 @@ test("a typical album is reported for each format and for all of them", () => {
   const card = html.slice(html.indexOf("A typical album, by format"), html.indexOf("Top 20 albums"));
   assert.match(card, /<th><\/th><th class="num">Vinyl<\/th><th class="num">CD<\/th><th class="num">All<\/th>/, "most common format first, then all");
   assert.match(card, /<td>Records<\/td><td class="num">4<\/td><td class="num">1<\/td><td class="num">5<\/td>/, "the box set counts as vinyl");
-  assert.match(card, /<td>Most valuable record<\/td><td class="num">900 kr<\/td><td class="num">50 kr<\/td><td class="num">900 kr<\/td>/);
+  assert.match(card, /<td>Most valuable record<\/td><td class="num">900\u00a0kr<\/td><td class="num">50\u00a0kr<\/td><td class="num">900\u00a0kr<\/td>/);
   assert.doesNotMatch(card, /Box Set/);
   const one = buildReport([vinyl(100)], ["Vinyl"], decodeCollectionValue(null), THEME, "now");
   assert.match(one.slice(one.indexOf("A typical album")), /<th><\/th><th class="num">Vinyl<\/th><\/tr>/, "one format: one column, named for it");
@@ -218,4 +223,44 @@ test("axes never show the same number twice", () => {
     { sections: { ...Object.fromEntries(SECTIONS.map(([k]) => [k, false])), condition: true } });
   const ticks = [...html.matchAll(/<text x="[\d.]+" y="[\d.]+" text-anchor="middle">(\d+)<\/text>/g)].map((m) => m[1]);
   assert.deepStrictEqual(ticks, ["0", "1"], "a single record: 0 and 1 only");
+});
+
+test("money is written in the chosen currency, the way its own country writes it", () => {
+  assert.strictEqual(formatMoney(1234.4, "SEK"), "1\u00a0234\u00a0kr");
+  assert.strictEqual(formatMoney(1234.6, "USD"), "$1,235");
+  assert.strictEqual(formatMoney(1234, "EUR"), "1.234\u00a0€");
+  assert.strictEqual(formatMoney(null, "USD"), "—");
+  assert.strictEqual(currencySymbol("GBP"), "£");
+  assert.strictEqual(currencyCode(" usd "), "USD");
+  assert.strictEqual(currencyCode("XYZ"), "", "only currencies Discogs prices in");
+});
+
+test("notes keep prices in new properties with their currency; notes from before 0.16 are read as kronor", () => {
+  const now = decodeRecord({ title: "T", price_mid: 20, market_lowest: 15, price_currency: "USD" }, "Vinyl", "", "x");
+  assert.deepStrictEqual([now.mid, now.list, now.currency], [20, 15, "USD"]);
+  const old = decodeRecord({ title: "T", price_mid_sek: 200, market_lowest_sek: 150 }, "Vinyl", "", "x");
+  assert.deepStrictEqual([old.mid, old.list, old.currency], [200, 150, "SEK"]);
+  const none = decodeRecord({ title: "T" }, "Vinyl", "", "x");
+  assert.strictEqual(none.currency, "", "no prices, no currency");
+});
+
+test("the dashboard is in the chosen currency; prices in another are left out and listed for a refresh", () => {
+  const dollars = decodeRecord({ title: "Dollar LP", artist: "A", format: "1x Vinyl, LP", price_mid: 20, market_lowest: 15, price_currency: "USD" }, "Vinyl", "", "x");
+  const kronor = decodeRecord({ title: "Krona LP", artist: "B", format: "1x Vinyl, LP", price_mid_sek: 900, market_lowest_sek: 800 }, "Vinyl", "", "y");
+  const html = reportModule.buildReport([dollars, kronor], ["Vinyl"], decodeCollectionValue({ discogs_value_median: 40, currency: "USD" }), THEME, "now", { currency: "USD" });
+  assert.match(html, /Records by value \(\$\)/, "chart titles use the currency's symbol");
+  assert.match(html, /&lt;5<\/text>[\s\S]*5–10<\/text>/, "value bands are scaled to the currency: 50–100 kr becomes $5–10");
+  assert.match(html, /Discogs collection value<\/td><td class="num">—<\/td><td class="num">\$40<\/td>/);
+  assert.doesNotMatch(html, /900|kr\b/, "the kronor prices aren't mixed into dollar figures");
+  assert.match(html, /Prices in another currency than USD \(run Refresh prices\)<\/td><td class="num">1<\/td><td>Krona LP/);
+  const inKronor = reportModule.buildReport([dollars], ["Vinyl"], decodeCollectionValue({ discogs_value_median: 40, currency: "USD" }), THEME, "now", { currency: "SEK" });
+  assert.match(inKronor, /Discogs collection value<\/td><td class="num">—<\/td><td class="num">—<\/td>/, "a value in another currency isn't shown as kronor");
+});
+
+test("the value-over-time chart only joins values in the chosen currency", () => {
+  const history = [{ date: "2026-01-01", min: 1, med: 2, max: 3 }, { date: "2026-02-01", min: 1, med: 2, max: 3 }, { date: "2026-03-01", min: 1, med: 2, max: 3, currency: "USD" }];
+  const one = decodeRecord({ title: "T", format: "1x Vinyl", added_to_discogs: "2026-01-01" }, "Vinyl", "", "x");
+  const growth = (cur) => { const h = reportModule.buildReport([one], ["Vinyl"], decodeCollectionValue(null), THEME, "now", { currency: cur, history }); return h.slice(h.indexOf("Collection value (Discogs)"), h.indexOf("<h2>Value spread</h2>")); };
+  assert.match(growth("SEK"), /<path/, "two entries from before 0.16, in kronor");
+  assert.match(growth("USD"), /appears once there are two syncs/, "only one in dollars so far");
 });

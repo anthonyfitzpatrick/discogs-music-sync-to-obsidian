@@ -34,7 +34,7 @@ test("the views: grouped by genre, and value first", () => {
 
 test("table columns show the record's values, with money", () => {
   const [queen] = records;
-  assert.strictEqual(COLUMNS.mid.get(queen), "1\u00a0163 kr", "Swedish grouping uses a no-break space");
+  assert.strictEqual(COLUMNS.mid.get(queen), "1\u00a0163\u00a0kr", "a note from before 0.16 is in kronor, written the Swedish way");
   assert.strictEqual(COLUMNS.low.get(queen), "");
   assert.strictEqual(COLUMNS.ripped, undefined);
   assert.strictEqual(COLUMNS.genres.get(records[1]), "Rock, Metal");
