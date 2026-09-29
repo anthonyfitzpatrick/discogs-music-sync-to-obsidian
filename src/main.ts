@@ -3,7 +3,7 @@
    shows them in its own Music view (views.ts), and is set up in its settings tab (settings.ts).
    Safety: never overwrites an existing album note (except price fields on "Refresh prices").
    Assumes nothing about the vault: every folder comes from the settings. */
-import { FileSystemAdapter, Notice, Plugin, TFile, moment, requestUrl, setIcon } from "obsidian";
+import { FileSystemAdapter, Notice, Plugin, TFile, requestUrl, setIcon } from "obsidian";
 import type { TAbstractFile } from "obsidian";
 import { tidy, slug, guessIcon, nameProblem, formatCounts, basesNeeded, sameFormat } from "./bases.ts";
 import type { Base, HasFormats } from "./bases.ts";
@@ -21,6 +21,7 @@ import type { CollectionValue, MusicRecord, ReportOptions, Theme } from "./repor
 import { MARGIN, defaults, loadSettings, paperSize } from "./settings-data.ts";
 import type { PdfSettings, RunMode, Settings } from "./settings-data.ts";
 import { MusicSettingTab } from "./settings.ts";
+import { exportStamp, fileStamp, timeAgo } from "./time.ts";
 import { VERSION } from "./version.ts";
 import { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote } from "./views.ts";
 import type { MusicHost } from "./views.ts";
@@ -446,7 +447,7 @@ class MusicLibrarySync extends Plugin implements MusicHost {
     try {
       const value = this.collectionValue();
       const theme = this.themeForReport();
-      const stamp = moment().format("D MMMM YYYY, HH:mm");
+      const started = new Date(), stamp = exportStamp(started);
       // the report's rules are in the plugin's styles.css, which the page embeds
       const css = await adapter.read(`${this.manifest.dir ?? ""}/styles.css`).catch(() => "");
       const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp, { ...this.reportOptions(), css });
@@ -470,7 +471,7 @@ class MusicLibrarySync extends Plugin implements MusicHost {
         const dir = `${this.data.folder}/Exports`;
         const files = vaultFiles(this.app);
         if (!(await files.exists(dir))) await files.mkdir(dir);
-        const out = `${dir}/Music Dashboard ${moment().format("YYYY-MM-DD HHmm")} ${size} ${orientation}.pdf`;
+        const out = `${dir}/Music Dashboard ${fileStamp(started)} ${size} ${orientation}.pdf`;
         // SAFETY: printToPDF returns a Node Buffer, whose memory is a plain ArrayBuffer, never a shared one.
         await files.writeBinary(out, pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer);
         notice.hide();
@@ -516,7 +517,7 @@ class MusicLibrarySync extends Plugin implements MusicHost {
     [p.sync, p.prices, p.dash, p.pdf].forEach((b) => { b.disabled = s.running; });
     p.cancel.toggle(s.running);
     if (s.running) p.meta.setText(s.mode === "sync" ? "Syncing with Discogs…" : s.mode === "prices" ? "Refreshing prices…" : "Refreshing the collection value…");
-    else if (last) p.meta.setText(`${last.ok ? "✓" : "⚠"} Last ${last.mode === "sync" ? "sync" : last.mode === "prices" ? "price refresh" : "value refresh"} ${moment(last.at).fromNow()} · ${last.summary}`);
+    else if (last) p.meta.setText(`${last.ok ? "✓" : "⚠"} Last ${last.mode === "sync" ? "sync" : last.mode === "prices" ? "price refresh" : "value refresh"} ${timeAgo(last.at)} · ${last.summary}`);
     else p.meta.setText("Nothing synced yet");
     p.steps.empty();
     const all = s.stepList || this.steps();
