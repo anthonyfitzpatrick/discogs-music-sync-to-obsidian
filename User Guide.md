@@ -450,7 +450,7 @@ Doughnut charts of records per base and of the top ten genres, and a bar chart o
 ### 10.6 Pressings
 
 - **Country of release** and **Top labels**: your ten most common of each.
-- **Original releases and reissues**: a reissue is a copy released after the original year, or one Discogs describes as a reissue, repress or remaster.
+- **Original releases and reissues**: a reissue is a copy Discogs describes as a reissue, repress or remaster. A release year later than the original doesn't count on its own, since a record often came out a year later in another country as a first pressing.
 - **Albums and compilations**: from Discogs' description of each release.
 
 ### 10.7 By decade

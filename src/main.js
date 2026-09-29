@@ -22,7 +22,7 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "0.13.1";
+const VERSION = "0.13.2";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } from "./bases.js";

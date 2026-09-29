@@ -158,6 +158,8 @@ test("the market, pressings, listening, condition and attention figures are righ
   assert.match(part("Market", "What&#39;s in the collection"), /Rare One<\/td><td>A<\/td><td><span[^>]*>Vinyl<\/span><\/td><td class="num">2<\/td>/, "fewest for sale first");
   assert.match(part("Market", "What&#39;s in the collection"), /Above estimate[\s\S]*Rare One[\s\S]*\+50%/, "900 listed against a 600 estimate");
   assert.match(part("Pressings", "By decade"), /Reissue or repress — 50% \(1\)/);
+  const later = decodeRecord({ title: "T", format: "1x Vinyl, LP, Album", year: 1978, original_year: 1977 }, "Vinyl", "", "x");
+  assert.strictEqual(later.reissue, false, "a later year alone isn't a reissue: it may be a first pressing elsewhere");
   assert.match(part("Pressings", "By decade"), /Compilation — 50% \(1\)/);
   assert.doesNotMatch(html, /<h2>Spending<\/h2>|Total paid/, "spending was removed in 0.13.1");
   const listening = part("Listening", "Condition");

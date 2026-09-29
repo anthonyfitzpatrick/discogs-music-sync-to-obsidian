@@ -45,7 +45,8 @@ function decodeRecord(fm, media, body, fallbackTitle, path = "") {
     purchased: day(fm.purchased), forSale: num(fm.market_for_sale), myCopy: num(fm.price_my_copy_sek), checked: day(fm.price_checked),
     releaseYear: num(fm.year), originalYear: num(fm.original_year),
     compilation: /\bcompilation\b/i.test(text(fm.format)),
-    reissue: /\b(reissue|repress|remaster(ed)?)\b/i.test(text(fm.format)) || (num(fm.year) !== null && num(fm.original_year) !== null && num(fm.year) > num(fm.original_year)),
+    // Only what Discogs calls the pressing: a later year alone is often a first pressing in another country.
+    reissue: /\b(reissue|repress|remaster(ed)?)\b/i.test(text(fm.format)),
     low: num(fm.price_low_sek), mid: num(fm.price_mid_sek), high: num(fm.price_high_sek),
     max: num(fm.price_max_sek) ?? num(fm.price_high_sek), list: num(fm.market_lowest_sek),
     year: num(fm.original_year) || num(fm.year), added: day(fm.purchased) || day(fm.added_to_discogs),
@@ -398,7 +399,7 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
           series: [{ name: "Records", colors: P.distinct(labels.length), values: labels.map((l) => l[1]) }] })),
         card("Original releases and reissues", doughnut(P, ["Original release", "Reissue or repress"], [recs.length - reissues, reissues], P.distinct(2))),
         card("Albums and compilations", doughnut(P, ["Album", "Compilation"], [recs.length - comps, comps], P.distinct(2))),
-      ) + `<div class="sub">A reissue is a copy released after the original year, or one Discogs describes as a reissue, repress or remaster.</div>`);
+      ) + `<div class="sub">A reissue is a copy Discogs describes as a reissue, repress or remaster.</div>`);
     },
 
     decades() {
