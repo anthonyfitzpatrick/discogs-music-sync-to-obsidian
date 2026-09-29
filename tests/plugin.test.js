@@ -5,7 +5,8 @@ const assert = require("node:assert");
 const Module = require("node:module");
 const path = require("node:path");
 
-global.window = { setInterval: () => 0, setTimeout: () => 0 };   // onload's refresh timer; nothing else needs a browser
+// Timers are real, so waits finish; the refresh interval is never started.
+global.window = { setInterval: () => 0, setTimeout: (f, ms) => setTimeout(f, ms), clearTimeout: (t) => clearTimeout(t) };
 const notices = [];
 // What the stand-in for Obsidian's requestUrl answers; a test replaces it to play Discogs.
 let network = async () => ({ status: 500, json: {} });
@@ -24,21 +25,25 @@ const stub = {
   requestUrl: (req) => network(req),
   setIcon() {},
   moment: () => ({ format: () => "" }),
+  normalizePath: (p) => p.replace(/\/+/g, "/").replace(/^\/|\/$/g, "") || "/",
 };
 const load = Module._load;
 Module._load = function (req, ...rest) { return req === "obsidian" ? stub : load.call(this, req, ...rest); };
-const Plugin = require(path.join(__dirname, "..", "main.js"));
-const { Engine, vaultFiles, openNote, MusicView } = Plugin;
+// The bundle's default export is the plugin class, as Obsidian loads it; the rest are exported for testing.
+const built = require(path.join(__dirname, "..", "main.js"));
+const { default: Plugin, Engine, vaultFiles, openNote, MusicView } = built;
 
 // An in-memory vault whose paths are case-insensitive, like the default macOS and Windows disks.
 function makeVault(entries = {}) {
   const files = new Map(), calls = [];   // calls: what went through Obsidian's Vault API
   const local = new Map();                // Obsidian's local storage for this vault
+  const secrets = new Map();              // Obsidian's secret storage on this device
   const put = (p, text = null) => files.set(p.toLowerCase(), { path: p, text });
   for (const [p, t] of Object.entries(entries)) put(p, t);
   const adapter = {
     exists: async (p) => files.has(p.toLowerCase()),
     read: async (p) => files.get(p.toLowerCase()).text,
+    process: async (p, fn) => { const f = files.get(p.toLowerCase()); f.text = fn(f.text); return f.text; },
     write: async (p, t) => put(p, t),
     mkdir: async (p) => put(p),
     writeBinary: async (p) => put(p, "<binary>"),
@@ -52,21 +57,24 @@ function makeVault(entries = {}) {
       getAbstractFileByPath: (p) => { const f = files.get(p.toLowerCase()); return f && f.path === p ? f : null; },
       createFolder: async (p) => put(p),
       create: async (p, t) => { if (files.has(p.toLowerCase())) throw new Error("File already exists"); put(p, t); calls.push(`create ${p}`); },
-      process: async (f, fn) => { f.text = fn(f.text); },
+      getFileByPath: (p) => { const f = files.get(p.toLowerCase()); return f && f.path === p && f.text !== null ? f : null; },
+      read: async (f) => f.text,
+      process: async (f, fn) => { f.text = fn(f.text); calls.push(`process ${f.path}`); return f.text; },
       on: () => ({}),
-      trash: async (f) => { calls.push(`trash ${f.path}`); files.delete(f.path.toLowerCase()); },
       modify: async (f, text) => { f.text = text; calls.push(`modify ${f.path}`); },
       createBinary: async (p) => { put(p, "<binary>"); calls.push(`createBinary ${p}`); },
       modifyBinary: async (f) => { calls.push(`modifyBinary ${f.path}`); },
     },
-    fileManager: { renameFile: async (f, to) => { calls.push(`renameFile ${f.path} → ${to}`); files.delete(f.path.toLowerCase()); f.path = to; files.set(to.toLowerCase(), f); } },
+    fileManager: { trashFile: async (f) => { calls.push(`trash ${f.path}`); files.delete(f.path.toLowerCase()); },
+      renameFile: async (f, to) => { calls.push(`renameFile ${f.path} → ${to}`); files.delete(f.path.toLowerCase()); f.path = to; files.set(to.toLowerCase(), f); } },
     plugins: { enabledPlugins: new Set(), plugins: {} },
     workspace: { getLeavesOfType: () => [], on: () => ({}) },
     metadataCache: { on: () => ({}) },
     loadLocalStorage: (k) => local.get(k) ?? null,
     saveLocalStorage: (k, v) => { if (v === null) local.delete(k); else local.set(k, v); },
+    secretStorage: { getSecret: (k) => secrets.get(k) ?? null, setSecret: (k, v) => { if (!/^[a-z0-9-]+$/.test(k)) throw new Error("bad id"); secrets.set(k, v); } },
   };
-  return { app, files, calls, local, text: (p) => files.get(p.toLowerCase())?.text };
+  return { app, files, calls, local, secrets, text: (p) => files.get(p.toLowerCase())?.text };
 }
 
 // A collection item as Discogs sends it.
@@ -291,21 +299,31 @@ test("the sync works through Obsidian's Vault API, so Obsidian's index sees ever
   eng.discogs = makeEngine(vault, [VINYL, CDS], [item(5, ["CD"]), item(6, ["Vinyl"])]).eng.discogs;
   await eng.syncAll();
   assert.ok(vault.calls.includes("renameFile Music/Vinyl/Misfiled.md → Music/CDs/Misfiled.md"), "moved with Obsidian's file manager, so links follow");
-  assert.ok(vault.calls.some((c) => c.startsWith("modify Music/Vinyl/Misfiled.md")), "retagged through the vault");
+  assert.ok(vault.calls.some((c) => c.startsWith("process Music/Vinyl/Misfiled.md")), "retagged through the vault, in one step");
   assert.ok(vault.calls.some((c) => /^create Music\/Vinyl\/.*\.md$/.test(c)), "new notes created through the vault");
   assert.match(vault.text("Music/CDs/Misfiled.md"), /  - cd-library\n[\s\S]*Bought at a fair\./);
 });
 
 // ------------------------------------------------------------------ nothing outside the plugin
 
-test("tokens are kept in Obsidian's local storage, never in a file", async () => {
-  const { p, files } = await makePlugin(undefined);
+test("tokens are kept in Obsidian's secret storage, never in a file", async () => {
+  const { p, files, secrets } = await makePlugin(undefined);
   p.saveToken("discogs", "  abc123 ");
   assert.strictEqual(p.token("discogs"), "abc123");
+  assert.strictEqual(secrets.get("music-library-sync-discogs-token"), "abc123");
   assert.strictEqual(p.token("genius"), "");
   assert.deepStrictEqual([...files.values()].filter((f) => f.text !== null), [], "no file written");
   p.saveToken("discogs", "");
   assert.strictEqual(p.token("discogs"), "", "an empty token clears it");
+});
+
+test("tokens that 0.11 and 0.12 kept in local storage move to secret storage", async () => {
+  const v = makeVault();
+  v.app.saveLocalStorage("music-library-sync-discogs-token", "kept-locally");
+  const p = new Plugin(); p.app = v.app;
+  await p.onload();
+  assert.strictEqual(p.token("discogs"), "kept-locally");
+  assert.strictEqual(v.local.size, 0, "nothing left in local storage");
 });
 
 test("tokens that earlier versions kept in files are read in once", async () => {

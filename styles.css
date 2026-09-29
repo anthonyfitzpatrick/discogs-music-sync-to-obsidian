@@ -330,3 +330,30 @@
 .mls-tab:hover { color: var(--text-normal); background: var(--background-modifier-hover); }
 .mls-tab.is-active { color: var(--text-normal); border-bottom-color: var(--text-normal); }
 .mls-tab .mls-ic svg { width: 16px; height: 16px; }
+
+/* The dashboard report. The Dashboard tab and the PDF export share these rules: in the app the colours
+   follow the theme, and the PDF page, which embeds this file, sets the variables to the theme's
+   resolved colours. Chart colours are drawn into the charts themselves (report.js). */
+.mls-report { --mls-fg: var(--text-normal); --mls-muted: var(--text-muted); --mls-border: var(--background-modifier-border);
+  --mls-font: inherit; color: var(--mls-fg); font-family: var(--mls-font); font-size: 12px; }
+.mls-report .sub { color: var(--mls-muted); font-size: 11px; margin: 2px 0 10px; }
+.mls-report .note { color: var(--mls-muted); margin: 4px 0; }
+.mls-report section { margin-bottom: 18px; break-inside: auto; }
+.mls-report h2 { font-size: 17px; margin: 0 0 2px; padding-left: 10px; border-left: 5px solid var(--mls-fg); break-after: avoid; color: var(--mls-fg); }
+.mls-report .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
+.mls-report .card { border: 1px solid var(--mls-border); border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; break-inside: avoid; }
+.mls-report .grid > .card { margin-bottom: 0; }
+.mls-report .grid + .card { margin-top: 12px; }
+.mls-report .card-title { font-weight: 700; margin-bottom: 6px; }
+.mls-report svg { display: block; width: 100%; height: auto; }
+.mls-report table { width: 100%; border-collapse: collapse; margin: 0; }
+.mls-report th { text-align: left; color: var(--mls-muted); font-weight: 600; border-bottom: 1px solid var(--mls-border); padding: 4px 6px; }
+.mls-report td { padding: 4px 6px; border-bottom: 1px solid var(--mls-border); vertical-align: middle; color: var(--mls-fg); }
+.mls-report tr { break-inside: avoid; }
+.mls-report .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mls-report tr.total td { font-weight: 800; border-top: 2px solid var(--mls-border); border-bottom: none; }
+.mls-report .pill { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
+.mls-report a.mls-open { color: var(--mls-fg); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+
+/* Reads the active theme's colours for the PDF and the charts; never shown. */
+.mls-theme-probe { display: none; font-family: var(--font-text, sans-serif); }

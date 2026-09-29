@@ -54,4 +54,4 @@ function formatCounts(items) {
   return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
-module.exports = { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts };
+export { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts };

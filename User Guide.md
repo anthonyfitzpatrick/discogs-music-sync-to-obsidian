@@ -58,7 +58,7 @@ The plugin is careful with your notes:
 
 | Requirement | Why |
 |---|---|
-| Obsidian 1.9 or later, on desktop (macOS, Windows or Linux) | The plugin and its PDF export run on desktop only. |
+| Obsidian 1.13 or later, on desktop (macOS, Windows or Linux) | The plugin and its PDF export run on desktop only. |
 | A Discogs account with your records in your collection | This is where the records come from. |
 | A Discogs personal access token | Lets the plugin read your collection and prices. |
 | A Genius API access token (optional) | Adds lyrics links to tracklists. |
@@ -133,13 +133,13 @@ You can keep working in Obsidian while it runs; the panel at the top of the dash
 
 ## 5. The settings page
 
-Open **Settings → Discogs music sync and dashboard**. Changes are saved as you make them and apply from the next sync.
+Open **Settings → Discogs music sync and dashboard**. Changes are saved as you make them and apply from the next sync. Every setting also turns up in Obsidian's settings search, so typing "token" or "paper size" in the search box at the top of Settings finds it.
 
 ### 5.1 Library folder and Discogs
 
-- **Library folder**: the folder new bases get their folders in, and where removed records and PDF exports go. It is `Music` unless you change it, and can be anywhere in your vault, such as `Collections/Records`. Bases you already have keep their folders.
+- **Library folder**: the folder new bases get their folders in, and where removed records and PDF exports go. It is `Music` unless you change it, and can be anywhere in your vault, such as `Collections/Records`. Bases you already have keep their folders. A name Obsidian can't use (one starting with a dot, or containing `\ : * ? " < > | # ^ [ ]`) is shown in red under the field and isn't saved.
 - **Username**: the Discogs account whose collection is synced.
-- **Personal access token**: paste a token and press Enter to save it. The field is masked and always shows empty; the description says whether a token is saved on this device. Paste a new token at any time to replace it.
+- **Personal access token**: paste a token and press Enter (or leave the field) to save it. The field is masked and always shows empty; the description says whether a token is saved on this device. Paste a new token at any time to replace it.
 - **Test**: checks the saved token with Discogs.
   - "Connected as *name*" means everything is fine.
   - "The token belongs to *X*, but the username above is *Y*" means the token and username don't match. Syncing uses the username, so fix whichever is wrong.
@@ -153,18 +153,19 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 
 ### 5.3 Bases
 
-Lists every base with its icon, name, formats, folder and tag.
+**Set up from Discogs** adds bases for formats in your collection that don't have one yet. It is greyed out until a username and token are saved.
 
-- The **pencil** button edits or renames the base.
-- The **bin** button stops syncing it.
-- **Set up from Discogs** adds bases for formats in your collection that don't have one yet.
-- **Add base** creates a new one by hand.
+Below it, the list shows every base with its icon, name, formats, folder and tag.
+
+- The **+** button at the top of the list creates a base by hand.
+- The **pencil** button edits or renames a base.
+- The **delete** button stops syncing it, after asking. You can also select a base and press Delete.
 
 See [section 6](#6-bases).
 
 ### 5.4 Files from earlier versions
 
-Shown only if your vault still has files that earlier versions of the plugin made and this version no longer uses (see [section 15](#15-upgrading-from-an-earlier-version)). It lists them, and **Move to trash** moves them to your system trash after asking, so you can get them back.
+Shown only if your vault still has files that earlier versions of the plugin made and this version no longer uses (see [section 15](#15-upgrading-from-an-earlier-version)). It lists them, and **Move to trash** moves them to the trash after asking (the system trash or the vault's `.trash` folder, as chosen under Settings → Files and links), so you can get them back.
 
 ### 5.5 Dashboard
 
@@ -568,7 +569,7 @@ The library folder is `Music` unless you change it in settings.
 |---|---|
 | The Music view, its Dashboard and Library tabs, charts and layout | The plugin's code |
 | Settings (including the library folder, dashboard sections and colours), bases, the last run, the collection value and its history, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
-| Discogs and Genius tokens | Obsidian's local storage for this vault on this device |
+| Discogs and Genius tokens | Obsidian's secret storage on this device, encrypted by the operating system |
 
 ## 15. Upgrading from an earlier version
 
@@ -587,7 +588,7 @@ Your bases and settings carry over. The old files are left alone until you choos
 
 - The plugin connects only to `api.discogs.com` and `api.genius.com`, and only when you sync, refresh prices or the collection value, set up or edit bases, or test a token. There is no telemetry.
 - Genius is sent only artist and track names.
-- Tokens are kept in Obsidian's local storage for this vault on this device. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
+- Tokens are kept in Obsidian's secret storage on this device, which the operating system encrypts; they appear under Settings → Keychain. Tokens saved by versions 0.11 and 0.12 move there on their own the first time 0.13 loads. They are never written to a file, the vault or the plugin's `data.json`, so they can't end up in git or a shared sync. The settings page never shows a saved token.
 - If a token has ever been exposed, revoke it on Discogs or Genius, create a new one and paste it into settings.
 
 ## 17. Troubleshooting

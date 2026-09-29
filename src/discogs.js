@@ -32,4 +32,4 @@ function decodeIdentity(json) {
   return name;
 }
 
-module.exports = { decodeCollectionPage, decodeIdentity };
+export { decodeCollectionPage, decodeIdentity };

@@ -1,5 +1,6 @@
 // Tests src/report.js directly: the PDF report is built without Obsidian, Dataview or Charts.
 const { test } = require("node:test");
+const STYLES = require("node:fs").readFileSync(require("node:path").join(__dirname, "..", "styles.css"), "utf8");
 const assert = require("node:assert");
 const { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, SECTIONS, FULL_BASES } = require("../src/report.js");
 
@@ -79,16 +80,26 @@ test("the report copes with no records and with records lacking prices", () => {
 
 test("in the dashboard view, albums open their notes and new records can be ticked as listened", () => {
   const records = [decodeRecord({ title: "T", artist: "A", purchased: "2026-09-01", price_mid_sek: 10 }, "Vinyl", "", "x", 'Music/Vinyl/A "quoted" <note>.md')];
-  const { body, css } = reportParts(records, ["Vinyl"], decodeCollectionValue(null), THEME, true);
+  const { body } = reportParts(records, ["Vinyl"], decodeCollectionValue(null), THEME, true);
   assert.match(body, /<a class="mls-open" data-path="Music\/Vinyl\/A &quot;quoted&quot; &lt;note&gt;\.md">T<\/a>/, "the path is escaped");
   assert.match(body, /<input type="checkbox" class="mls-listen" data-path="Music\/Vinyl\/A &quot;quoted&quot; &lt;note&gt;\.md"/);
   assert.doesNotMatch(buildReport(records, ["Vinyl"], decodeCollectionValue(null), THEME, "now"), /class="mls-open"|class="mls-listen"/, "the PDF has neither");
-  assert.ok(css.split("}").filter((r) => r.trim()).every((r) => r.trim().startsWith(".mls-report")), "every style is scoped to the report");
 });
 
-test("the report's styles have no declarations outside a rule", () => {
+test("the report's styles are in styles.css, where the PDF finds them, with its colours as variables", () => {
+  const css = STYLES.slice(STYLES.indexOf("/* The dashboard report."));
+  const rules = css.replace(/\/\*[\s\S]*?\*\//g, "").split("}").map((r) => r.trim()).filter(Boolean);
+  const report = rules.filter((r) => r.startsWith(".mls-report"));
+  assert.ok(report.length > 10, "the report's rules are there");
+  assert.doesNotMatch(report.join("}"), /#[0-9a-f]{3,6}\b/i, "colours come from variables, so the theme and the PDF can set them");
+  const html = buildReport([rec({})], ["Vinyl"], decodeCollectionValue(null), THEME, "now", { css: STYLES });
+  assert.ok(html.includes(".mls-report h2 {"), "the PDF embeds the stylesheet");
+  assert.match(html, new RegExp(`--mls-fg: ${THEME.fg}`), "and sets the colours to the theme's");
+});
+
+test("styles.css has no declarations outside a rule", () => {
   // Leftover declarations with no selector swallow the next rule; it happened to the old dashboard's table.
-  const { css } = reportParts([rec({})], ["Vinyl"], decodeCollectionValue(null), THEME, true);
+  const css = STYLES.replace(/\/\*[\s\S]*?\*\//g, "");
   let depth = 0, selector = "";
   for (const ch of css) {
     if (ch === "{") { if (depth++ === 0) { assert.doesNotMatch(selector, /;/, selector.trim()); selector = ""; } }

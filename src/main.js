@@ -3,23 +3,35 @@
    through the vault adapter. No Python required.
    Safety: never overwrites an existing album note (except price fields on "Refresh prices").
    Assumes nothing about the vault: every folder comes from the settings. */
-const obsidian = require("obsidian");
-const { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting } = obsidian;
+import { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting, normalizePath } from "obsidian";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 // The library folder a new install starts with; the user can choose another in settings.
 const DEFAULT_FOLDER = "Music";
 // A folder path as typed, cleaned: no leading/trailing slashes, single slashes, no empty parts.
-const cleanFolder = (v) => String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
-const VERSION = "0.12.4";
+const cleanFolder = (v) => {
+  const f = String(v ?? "").split("/").map((x) => x.trim()).filter(Boolean).join("/");
+  return f ? normalizePath(f) : "";
+};
+// Why a folder name typed in settings can't be used, or "" when it can.
+const folderProblem = (v) => {
+  const f = cleanFolder(v);
+  if (!f) return "Enter a folder name.";
+  if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
+  return "";
+};
+const VERSION = "0.13.0";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
-const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("./bases.js");
+import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } from "./bases.js";
 // Decoders for Discogs responses, applied where the responses arrive.
-const { decodeCollectionPage, decodeIdentity } = require("./discogs.js");
+import { decodeCollectionPage, decodeIdentity } from "./discogs.js";
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
-const { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, SECTIONS, COLOUR_MODES, FULL_BASES, DEFAULT_ACCENT } = require("./report.js");
+import { decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, SECTIONS, COLOUR_MODES, FULL_BASES, DEFAULT_ACCENT } from "./report.js";
 // The plugin's own view — the Dashboard and Library tabs — in place of a dashboard note and .base files.
-const { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote } = require("./views.js");
+import { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote } from "./views.js";
 
 const REPO = "https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian";
 
@@ -39,14 +51,15 @@ const DEFAULTS = { last: null, username: "", folder: DEFAULT_FOLDER, lyrics: tru
 // asking; in any other vault they simply aren't found. (Each base's .base file is added on loading.)
 const LEGACY_FILES = ["Music/Music Dashboard.md", "Music/All Media.base", "Music/.discogs-token", "Music/.genius-token",
   "Music/.vinyl-sync/collection-value.json", "Music/.vinyl-sync/last-export.html"];
-// Tokens live in Obsidian's local storage for this vault on this device: never in a file, so never in git.
+// Tokens live in Obsidian's secret storage on this device, which the operating system encrypts: never in a
+// file, so never in git. (Versions before 0.13 kept them in local storage, under the same names.)
 const TOKEN_KEYS = { discogs: "music-library-sync-discogs-token", genius: "music-library-sync-genius-token" };
 const ICONS = ["disc-3", "disc", "disc-2", "cassette-tape", "album", "music", "music-2", "radio", "headphones", "library", "guitar", "piano"];
 const PRICE_KEYS = ["price_low_sek", "price_mid_sek", "price_high_sek", "price_max_sek", "price_my_copy_sek", "market_lowest_sek", "market_for_sale", "price_checked"];
 const GRADE = { low: "Good Plus (G+)", mid: "Very Good Plus (VG+)", high: "Near Mint (NM or M-)" };
 
 /* ------------------------------------------------------------------ helpers */
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pause = (ms) => new Promise((r) => window.setTimeout(r, ms));
 const today = () => new Date().toISOString().slice(0, 10);
 const q = (v) => JSON.stringify(v ?? "");
 const cleanName = (n) => (n || "").replace(/\s\(\d+\)$/, "").trim();
@@ -59,12 +72,12 @@ function artistsStr(arts) {
   }
   return s.replace(/\s+/g, " ").replace(/^[\s,]+|[\s,]+$/g, "");
 }
-const safe = (s) => s.replace(/[\\/:*?"<>|#^\[\]]/g, "").trim().replace(/\.+$/, "");
+const safe = (s) => s.replace(/[\\/:*?"<>|#^[\]]/g, "").trim().replace(/\.+$/, "");
 const norm = (s) => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
-const n2 = (s) => String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^\x00-\x7f]/g, "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+const n2 = (s) => String(s ?? "").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[\u0080-\uffff]/g, "").toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
 const core = (title) => {
   let t = String(title).split(" – ").pop();
-  t = t.replace(/\s*[\(\[].*?[\)\]]/g, "").replace(/\s+-\s+(live|remaster|mono|stereo|single|edit|version).*$/i, "");
+  t = t.replace(/\s*[([].*?[)\]]/g, "").replace(/\s+-\s+(live|remaster|mono|stereo|single|edit|version).*$/i, "");
   return n2(t);
 };
 const artistOk = (want, got) => {
@@ -73,7 +86,7 @@ const artistOk = (want, got) => {
   return w === g || (g.length >= 4 && (w.includes(g) || g.includes(w)));
 };
 const titleOk = (got, want) => got === want || (Math.min(got.length, want.length) >= 6 && (got.startsWith(want) || want.startsWith(got)));
-const splitArtists = (a) => [a, ...String(a).split(/\s+(?:featuring|feat\.?|ft\.?|with|and|&)\s+|\s*[·,\/]\s*/i)].map((x) => x.trim()).filter((x, i, arr) => x && x.toLowerCase() !== "various" && arr.indexOf(x) === i);
+const splitArtists = (a) => [a, ...String(a).split(/\s+(?:featuring|feat\.?|ft\.?|with|and|&)\s+|\s*[·,/]\s*/i)].map((x) => x.trim()).filter((x, i, arr) => x && x.toLowerCase() !== "various" && arr.indexOf(x) === i);
 
 /* ------------------------------------------------------------------ files */
 // The engine's file access, through Obsidian's Vault API rather than straight to disk, so Obsidian's
@@ -86,7 +99,10 @@ function vaultFiles(app) {
   const file = (p) => vault.getAbstractFileByPath(p);
   return {
     exists: (p) => adapter.exists(p),
-    read: (p) => adapter.read(p),
+    read: (p) => { const f = hidden(p) ? null : vault.getFileByPath(p); return f ? vault.read(f) : adapter.read(p); },
+    // Changes a file's text in one step, so an edit made in between (by the user, or another device's
+    // sync) is never overwritten with an older copy.
+    process: (p, fn) => { const f = hidden(p) ? null : vault.getFileByPath(p); return f ? vault.process(f, fn) : adapter.process(p, fn); },
     list: (p) => adapter.list(p),
     async mkdir(p) { if (hidden(p)) await adapter.mkdir(p); else if (!file(p)) await vault.createFolder(p); },
     async write(p, text) {
@@ -122,16 +138,16 @@ class Engine {
     for (let attempt = 0; attempt < 6; attempt++) {
       if (this.isCancelled()) throw new Error("Cancelled");
       const wait = gap - (Date.now() - (this.last[kind] || 0));
-      if (wait > 0) await sleep(wait);
+      if (wait > 0) await pause(wait);
       this.last[kind] = Date.now();
       let r;
       try {
         r = await Promise.race([requestUrl({ url, headers, throw: false }),
-          sleep(30000).then(() => { throw new Error("timeout"); })]);
-      } catch (e) { this.log(`  ${host} didn't answer (${e.message}) — retrying ${attempt + 1}/5…`); await sleep(3000 * (attempt + 1)); continue; }
+          pause(30000).then(() => { throw new Error("timeout"); })]);
+      } catch (e) { this.log(`  ${host} didn't answer (${e.message}) — retrying ${attempt + 1}/5…`); await pause(3000 * (attempt + 1)); continue; }
       if (r.status === 429 || r.status >= 500) {
         const w = kind === "discogs" ? 15000 : 3000 * (attempt + 1);
-        this.log(`  ${host} is busy (${r.status}) — waiting ${Math.round(w / 1000)} s…`); await sleep(w); continue; }
+        this.log(`  ${host} is busy (${r.status}) — waiting ${Math.round(w / 1000)} s…`); await pause(w); continue; }
       if (r.status >= 400) { const err = new Error(`${r.status} ${url}`); err.status = r.status; err.body = r.text; throw err; }
       return binary ? r.arrayBuffer : r.json;
     }
@@ -222,7 +238,7 @@ class Engine {
         const v = (g) => (s[g] ? Math.round(s[g].value) : "");
         out.price_low_sek = v(GRADE.low); out.price_mid_sek = v(GRADE.mid); out.price_high_sek = v(GRADE.high); out.price_max_sek = v("Mint (M)");
         if (myCondition) out.price_my_copy_sek = v(myCondition);
-      } catch (e) { this.noSuggest = true; this.log("  (price suggestions need Discogs Seller Settings — skipping)"); }
+      } catch { this.noSuggest = true; this.log("  (price suggestions need Discogs Seller Settings — skipping)"); }
     }
     out.price_checked = today();
     return out;
@@ -311,15 +327,15 @@ class Engine {
     const name = path.split("/").pop();
     let dest = `${destDir}/${name}`, n = 2;
     while (await this.fs.exists(dest)) dest = `${destDir}/${name.replace(/\.md$/, "")} (${n++}).md`;
-    let text = await this.fs.read(path);
-    const end = text.indexOf("\n---", 3);
-    let fm = text.slice(0, end); const rest = text.slice(end);
     const tagLine = new RegExp(`^(\\s*-\\s*)#?${fromTag.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "m");
-    if (tagLine.test(fm)) fm = fm.replace(tagLine, `$1${toTag}`);
-    else this.log(`  (couldn't find the tag ${fromTag} in ${name}; set its tag to ${toTag} yourself)`);
-    if (addLine) fm = fm.replace("\ncssclasses:", `\n${addLine}\ncssclasses:`);
-    text = fm + rest;
-    await this.fs.write(path, text);
+    await this.fs.process(path, (text) => {
+      const end = text.indexOf("\n---", 3);
+      let fm = text.slice(0, end); const rest = text.slice(end);
+      if (tagLine.test(fm)) fm = fm.replace(tagLine, `$1${toTag}`);
+      else this.log(`  (couldn't find the tag ${fromTag} in ${name}; set its tag to ${toTag} yourself)`);
+      if (addLine) fm = fm.replace("\ncssclasses:", `\n${addLine}\ncssclasses:`);
+      return fm + rest;
+    });
     await this.fs.rename(path, dest);
   }
 
@@ -398,15 +414,23 @@ class Engine {
       const text = await this.fs.read(p);
       const end = text.indexOf("\n---", 3);
       if (!text.startsWith("---") || end < 0) continue;
-      let fm = text.slice(0, end); const rest = text.slice(end);
-      const id = fm.match(/^discogs_id:\s*(\d+)/m)?.[1]; if (!id) continue;
-      const mc = fm.match(/^media_condition:\s*"?([^"\n]*)"?/m)?.[1]?.trim() || "";
+      const id = text.slice(0, end).match(/^discogs_id:\s*(\d+)/m)?.[1]; if (!id) continue;
+      const mc = text.slice(0, end).match(/^media_condition:\s*"?([^"\n]*)"?/m)?.[1]?.trim() || "";
       const pr = await this.prices(id, mc);
-      for (const k of PRICE_KEYS) {
-        const line = `${k}: ${pr[k]}`, re = new RegExp(`^${k}:.*$`, "m");
-        fm = re.test(fm) ? fm.replace(re, line) : fm.replace(/^(discogs_id:)/m, `${line}\n$1`);
-      }
-      if (fm + rest !== text) { await this.fs.write(p, fm + rest); n++; }
+      // The prices go into the note as it is now: it may have been edited while Discogs was answering.
+      let changed = false;
+      await this.fs.process(p, (now) => {
+        const e = now.indexOf("\n---", 3);
+        if (!now.startsWith("---") || e < 0) return now;
+        let fm = now.slice(0, e);
+        for (const k of PRICE_KEYS) {
+          const line = `${k}: ${pr[k]}`, re = new RegExp(`^${k}:.*$`, "m");
+          fm = re.test(fm) ? fm.replace(re, line) : fm.replace(/^(discogs_id:)/m, `${line}\n$1`);
+        }
+        changed = fm + now.slice(e) !== now;
+        return fm + now.slice(e);
+      });
+      if (changed) n++;
     }
     onProgress?.(notes.length, notes.length);
     this.log(`${T.name}: prices refreshed on ${n} notes`);
@@ -435,7 +459,7 @@ class ExportModal extends Modal {
   onOpen() {
     const d = this.plugin.data.pdf || { size: "A4", orientation: "portrait" };
     const opts = { ...d };
-    this.titleEl.setText("Export Music Dashboard as PDF");
+    this.titleEl.setText("Export dashboard as PDF");
     new Setting(this.contentEl).setName("Paper size").addDropdown((dd) => {
       Object.keys(PAPER).forEach((k) => dd.addOption(k, `${k} (${PAPER[k][0]} × ${PAPER[k][1]} in)`));
       dd.setValue(opts.size).onChange((v) => (opts.size = v));
@@ -478,7 +502,7 @@ class MusicLibrarySync extends Plugin {
     this.registerMarkdownCodeBlockProcessor("music-sync", (_src, el) => this.renderPanel(el));
     this.registerView(MUSIC_VIEW, (leaf) => new MusicView(leaf, this));
     for (const type of Object.keys(OLD_VIEWS)) this.registerView(type, (leaf) => new MusicView(leaf, this, type));
-    this.addRibbonIcon("disc-3", "Open Music: Dashboard and Library", () => this.openView());
+    this.addRibbonIcon("disc-3", "Open music dashboard and library", () => this.openView());
     this.addCommand({ id: "open-dashboard", name: "Open dashboard", callback: () => this.openView("dashboard") });
     this.addCommand({ id: "open-library", name: "Open library", callback: () => this.openView("library") });
     this.addCommand({ id: "sync", name: "Sync from Discogs", callback: () => this.run("sync") });
@@ -504,10 +528,10 @@ class MusicLibrarySync extends Plugin {
   musicLeaves() { return [MUSIC_VIEW, ...Object.keys(OLD_VIEWS)].flatMap((t) => this.app.workspace.getLeavesOfType(t)); }
   async openView(tab) {
     const open = this.musicLeaves()[0];
-    if (open) { this.app.workspace.revealLeaf(open); if (tab) await open.view?.show?.(tab); return; }
+    if (open) { await this.app.workspace.revealLeaf(open); if (tab) await open.view?.show?.(tab); return; }
     const leaf = this.app.workspace.getLeaf(true);
     await leaf.setViewState({ type: MUSIC_VIEW, active: true, state: { tab: tab || this.data.tab } });
-    this.app.workspace.revealLeaf(leaf);
+    await this.app.workspace.revealLeaf(leaf);
   }
   redrawViews() {
     for (const leaf of this.musicLeaves()) leaf.view?.render?.().catch?.((e) => console.error(e));
@@ -599,10 +623,17 @@ class MusicLibrarySync extends Plugin {
   }
 
   /* ---- Discogs / Genius helpers for the settings page ---- */
-  token(kind) { return String(this.app.loadLocalStorage(TOKEN_KEYS[kind]) ?? ""); }
-  saveToken(kind, value) { this.app.saveLocalStorage(TOKEN_KEYS[kind], value.trim() || null); this.formatCache = null; }
-  // Tokens kept in files by earlier versions are read in once; the files are then offered for removal.
+  token(kind) { return String(this.app.secretStorage.getSecret(TOKEN_KEYS[kind]) ?? ""); }
+  saveToken(kind, value) { this.app.secretStorage.setSecret(TOKEN_KEYS[kind], value.trim()); this.formatCache = null; }
+  // Tokens kept in local storage by 0.11 and 0.12 move to secret storage, and leave local storage. Tokens
+  // kept in files by earlier versions are read in once; the files are then offered for removal.
   async importTokenFiles() {
+    for (const [kind, key] of Object.entries(TOKEN_KEYS)) {
+      const t = String(this.app.loadLocalStorage(key) ?? "").trim();
+      if (!t) continue;
+      if (!this.token(kind)) this.saveToken(kind, t);
+      this.app.saveLocalStorage(key, null);
+    }
     for (const [kind, file] of [["discogs", "Music/.discogs-token"], ["genius", "Music/.genius-token"]]) {   // where versions before 0.11 kept them
       if (this.token(kind) || !(await this.app.vault.adapter.exists(file))) continue;
       const t = (await this.app.vault.adapter.read(file)).trim();
@@ -615,13 +646,13 @@ class MusicLibrarySync extends Plugin {
     for (const p of [...new Set([...LEGACY_FILES, ...this.data.legacyFiles])]) if (await this.app.vault.adapter.exists(p)) out.push(p);
     return out;
   }
-  // Moves them to the system trash (recoverable): through Obsidian, except files in dot-folders or
-  // dot-files, which Obsidian doesn't index.
+  // Moves them to the trash (recoverable): through Obsidian, which follows the user's choice of system or
+  // vault trash, except files in dot-folders or dot-files, which Obsidian doesn't index.
   async trashLegacyFiles(paths) {
     for (const p of paths) {
       const hidden = p.split("/").some((part) => part.startsWith("."));
       const f = hidden ? null : this.app.vault.getAbstractFileByPath(p);
-      if (f) await this.app.vault.trash(f, true); else await this.app.vault.adapter.trashSystem(p);
+      if (f) await this.app.fileManager.trashFile(f); else await this.app.vault.adapter.trashSystem(p);
     }
     this.data.legacyFiles = [];
     await this.save();
@@ -646,7 +677,7 @@ class MusicLibrarySync extends Plugin {
     if (!this.data.username) throw new Error("No Discogs username entered yet");
     let items = [], page = 1;
     while (true) {
-      if (page > 1) await sleep(1100);                                   // Discogs' rate limit
+      if (page > 1) await pause(1100);                                   // Discogs' rate limit
       const r = await requestUrl({ url: `https://api.discogs.com/users/${encodeURIComponent(this.data.username)}/collection/folders/0/releases?per_page=100&page=${page}`,
         headers: { Authorization: `Discogs token=${t}`, "User-Agent": UA }, throw: false });
       if (r.status === 401) throw new Error("Discogs didn't accept the token");
@@ -676,10 +707,8 @@ class MusicLibrarySync extends Plugin {
 
   // The active theme's colours and font, resolved to values a standalone page can use.
   themeForReport() {
-    const probe = document.body.createDiv();
-    probe.style.display = "none";
-    const color = (name, fallback) => { probe.style.color = ""; probe.style.color = `var(${name}, ${fallback})`; return cssColorToHex(getComputedStyle(probe).color, fallback); };
-    probe.style.fontFamily = "var(--font-text, sans-serif)";
+    const probe = document.body.createDiv({ cls: "mls-theme-probe" });
+    const color = (name, fallback) => { probe.setCssProps({ color: `var(${name}, ${fallback})` }); return cssColorToHex(getComputedStyle(probe).color, fallback); };
     const theme = { fg: color("--text-normal", "#222222"), bg: color("--background-primary", "#ffffff"), muted: color("--text-muted", "#666666"),
       border: color("--background-modifier-border", "#cccccc"), font: getComputedStyle(probe).fontFamily || "sans-serif" };
     probe.remove();
@@ -689,17 +718,20 @@ class MusicLibrarySync extends Plugin {
   // Builds the Music Dashboard as its own page from the notes (report.js) and prints it to PDF with
   // Obsidian's desktop app. Dataview and Charts are not involved, and the dashboard needn't be open.
   async exportPdf({ size = "A4", orientation = "portrait" } = {}) {
-    const electron = require("electron");
-    const remote = electron.remote || (() => { try { return require("@electron/remote"); } catch { return null; } })();
+    // Electron is reached through Obsidian's own require, when the export runs, so the plugin loads
+    // even where PDF export can't run.
+    const electron = window.require("electron");
+    const remote = electron.remote || (() => { try { return window.require("@electron/remote"); } catch { return null; } })();
     if (!remote?.BrowserWindow) throw new Error("PDF export isn't available in this version of Obsidian. Please report it with “Report a bug” in the plugin's settings.");
     if (!this.data.libraries.length) throw new Error("Add a base first — there's nothing to export yet");
-    const fs = require("fs"), os = require("os"), path = require("path");
     const notice = new Notice("Preparing PDF…", 0);
     try {
       const value = this.collectionValue();
       const theme = this.themeForReport();
       const stamp = moment().format("D MMMM YYYY, HH:mm");
-      const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp, this.reportOptions());
+      // the report's rules are in the plugin's styles.css, which the page embeds
+      const css = await this.app.vault.adapter.read(`${this.manifest.dir}/styles.css`).catch(() => "");
+      const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp, { ...this.reportOptions(), css });
       const tmp = path.join(os.tmpdir(), `music-dashboard-export-${Date.now()}.html`);
       fs.writeFileSync(tmp, html, "utf8");
       const [w, h] = PAPER[size] || PAPER.A4;
@@ -763,7 +795,7 @@ class MusicLibrarySync extends Plugin {
     p.cancel.toggle(s.running);
     if (s.running) p.meta.setText(s.mode === "sync" ? "Syncing with Discogs…" : s.mode === "prices" ? "Refreshing prices…" : "Refreshing the collection value…");
     else if (last) p.meta.setText(`${last.ok ? "✓" : "⚠"} Last ${last.mode === "sync" ? "sync" : last.mode === "prices" ? "price refresh" : "value refresh"} ${moment(last.at).fromNow()} · ${last.summary}`);
-    else p.meta.setText("Press Sync to pull new records from Discogs");
+    else p.meta.setText("Nothing synced yet");
     p.steps.empty();
     const all = s.stepList || this.steps();
     const shown = s.mode === "dashboard" ? all.slice(-1) : all;
@@ -774,7 +806,7 @@ class MusicLibrarySync extends Plugin {
       pill.createSpan({ text: st.label });
     }
     p.bar.parentElement.toggle(s.running || !!s.justDone);
-    p.bar.style.width = `${Math.round(s.progress * 100)}%`;
+    p.bar.setCssProps({ width: `${Math.round(s.progress * 100)}%` });
     p.now.setText(s.running ? s.now : "");
     p.log.setText(s.log || "No run yet in this session.");
   }
@@ -835,7 +867,7 @@ class MusicLibrarySync extends Plugin {
       this.redrawViews();
     } catch (e) { failed = true; log(`ERROR: ${e.message}`); console.error(e); }
     finally {
-      const shown = Date.now() - started; if (shown < 1500) await new Promise((r) => setTimeout(r, 1500 - shown));
+      const shown = Date.now() - started; if (shown < 1500) await pause(1500 - shown);
       const summary = this.cancelled ? `cancelled after ${created} new` : failed ? "finished with errors — open Sync log" :
         mode === "sync" ? ([created ? `${created} new record${created === 1 ? "" : "s"} added` : "", eng.moved ? `${eng.moved} moved to the right base` : "",
           eng.removed ? `${eng.removed} removed` : "", eng.unplaced ? `${eng.unplaced} with no base for their format — see Sync log` : ""].filter(Boolean).join(", ") || "already up to date") :
@@ -859,10 +891,10 @@ class LibraryModal extends Modal {
     const v = { name: lib?.name || "", formats: [...(lib?.formats || [])], icon: lib?.icon || "disc-3" };
     this.titleEl.setText(lib ? `Edit “${lib.name}”` : "Add a base");
     if (!lib) c.createEl("p", { cls: "setting-item-description",
-      text: "A base takes every record of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music, with its own tag and its own place in the Library and on the Dashboard." });
+      text: `A base takes every record of the formats you choose, from anywhere in your Discogs collection, into its own folder in ${plugin.data.folder}, with its own tag and its own place in the library and on the dashboard.` });
     new Setting(c).setName("Name")
-      .setDesc(lib ? `The notes stay in ${lib.dir}.` : "Used for the base's folder in Music. No two bases can have the same name.")
-      .addText((t) => { t.setPlaceholder("e.g. Minidiscs").setValue(v.name).onChange((x) => { v.name = x; touched = true; check(); }); window.setTimeout(() => t.inputEl.focus(), 0); });
+      .setDesc(lib ? `The notes stay in ${lib.dir}.` : `Used for the base's folder in ${plugin.data.folder}. No two bases can have the same name.`)
+      .addText((t) => { t.setPlaceholder("MiniDiscs").setValue(v.name).onChange((x) => { v.name = x; touched = true; check(); }); window.setTimeout(() => t.inputEl.focus(), 0); });
 
     // Formats are picked from what Discogs reports for the collection, never typed, so a
     // misspelling can't quietly send records nowhere.
@@ -968,126 +1000,169 @@ class ConfirmModal extends Modal {
 }
 
 class MusicSettingTab extends PluginSettingTab {
-  constructor(app, plugin) { super(app, plugin); this.plugin = plugin; }
+  constructor(app, plugin) { super(app, plugin); this.plugin = plugin; this.legacy = []; }
 
-  async display() {
-    const P = this.plugin, d = P.data, el = this.containerEl;
-    const gen = (this.gen = (this.gen || 0) + 1);
-    const saved = { discogs: !!P.token("discogs"), genius: !!P.token("genius") };
-    const legacy = await P.legacyFilesPresent();
-    if (gen !== this.gen) return;                               // a newer redraw has started
-    el.empty();
-    const redraw = () => this.display();
+  // Obsidian draws the tab from these definitions and indexes them for its settings search. Plain values
+  // are controls, read and saved through getControlValue and setControlValue; rows with buttons, tokens
+  // and the list of bases draw themselves. update() redraws after a change that adds or removes rows.
+  getSettingDefinitions() {
+    const P = this.plugin, d = P.data;
+    const ready = () => !!d.username && !!P.token("discogs");
+    const custom = () => d.colours.mode === "custom";
+    const redraw = () => this.update();
+    this.checkLegacy().catch((e) => console.error(e));
+    return [
+      { name: "Getting started", searchable: false, visible: () => !ready() || !d.libraries.length, render: (s) => this.gettingStarted(s) },
+      { type: "group", heading: "Discogs", items: [
+        { name: "Library folder", desc: "Where new bases get their folders, and where removed records and PDF exports go. Existing bases keep their folders.",
+          control: { type: "text", key: "folder", placeholder: DEFAULT_FOLDER, validate: folderProblem } },
+        { name: "Username", desc: "The Discogs account whose collection is synced.", control: { type: "text", key: "username", placeholder: "Discogs username" } },
+        { name: "Personal access token", aliases: ["Discogs token"], desc: "Required. Create one at discogs.com → Settings → Developers.",
+          render: (s) => this.tokenRow(s, "discogs", "Discogs", async () => {
+            const who = await P.discogsIdentity();
+            if (!d.username) { d.username = who; await P.save(); redraw(); }
+            return who.toLowerCase() === d.username.toLowerCase() ? `Connected as ${who}` : `The token belongs to ${who}, but the username above is ${d.username}`;
+          }) },
+      ] },
+      { type: "group", heading: "Lyrics", items: [
+        { name: "Add Genius lyrics links", desc: "Look up each track on Genius when a record is added. Needs a Genius token.", control: { type: "toggle", key: "lyrics" } },
+        { name: "Genius access token", desc: "Optional. Create a client at genius.com/api-clients and generate an access token.",
+          render: (s) => this.tokenRow(s, "genius", "Genius", async () => { await P.geniusCheck(); return "Genius accepted the token"; }) },
+      ] },
+      { type: "group", heading: "Bases", items: [
+        { name: "Set up from Discogs", aliases: ["Add bases", "Formats"],
+          desc: "Each base takes the records of the formats you choose, from anywhere in your Discogs collection, into its own folder, with its own place in the library and on the dashboard. Choose formats from your collection to add as bases; names must be unique.",
+          disabled: () => !ready(), action: () => new SetupModal(this.app, P, redraw).open() },
+      ] },
+      // Removing a base asks first: its notes stay, but it leaves the sync, the library and the dashboard.
+      { type: "list", emptyState: "No bases yet.",
+        addItem: { name: "Add base", action: () => new LibraryModal(this.app, P, null, redraw).open() },
+        onDelete: (i) => {
+          const lib = d.libraries[i]; if (!lib) return;
+          new ConfirmModal(this.app, `Stop syncing “${lib.name}”?`,
+            `It disappears from the sync, the library and the dashboard. ${lib.dir} and its notes stay in your vault — delete them yourself if you no longer want them.`,
+            "Stop syncing", async () => { await P.removeLibrary(lib); redraw(); }).open();
+        },
+        items: d.libraries.map((lib) => ({ name: lib.name, desc: `Takes ${lib.formats.join(", ")} records → ${lib.dir} · #${lib.tag}`,
+          render: (s) => {
+            setIcon(s.nameEl.createSpan({ cls: "mls-lib-icon", prepend: true }), lib.icon);
+            s.addExtraButton((b) => b.setIcon("pencil").setTooltip("Rename or edit").onClick(() => new LibraryModal(this.app, P, lib, redraw).open()));
+          } })) },
+      { type: "group", heading: "Files from earlier versions", visible: () => this.legacy.length > 0, items: [
+        { name: "Move to trash", searchable: false,
+          desc: "Earlier versions kept these in your vault. The plugin no longer uses them: the dashboard and library views, and tokens kept on this device, have replaced them.",
+          render: (s) => {
+            const ul = s.descEl.createEl("ul", { cls: "mls-legacy-list" });
+            for (const f of this.legacy) ul.createEl("li", { text: f });
+            s.addButton((b) => b.setButtonText("Move to trash").setWarning().onClick(() => new ConfirmModal(this.app, "Move these files to the trash?",
+              `${this.legacy.join(", ")}. They go to the trash, so you can get them back.`, "Move to trash",
+              async () => { await P.trashLegacyFiles(this.legacy); new Notice("Moved to the trash"); this.legacy = []; redraw(); }).open()));
+          } },
+      ] },
+      { type: "group", heading: "Dashboard", items: SECTIONS.map(([key, label]) =>
+        ({ name: label, desc: "Shown on the dashboard and in its PDF.", control: { type: "toggle", key: `section:${key}` } })) },
+      { type: "group", heading: "Colours", items: [
+        { name: "Chart colours", aliases: ["Colors", "Theme"],
+          desc: "Theme uses shades of your theme's colours. Full colour is the plugin's original purple, pink and orange. Custom lets you choose. Text, lines and backgrounds always follow your theme.",
+          control: { type: "dropdown", key: "colourMode", options: COLOUR_MODES } },
+        ...d.libraries.map((lib, i) => ({ name: lib.name, desc: "This base's colour in every chart and label.", visible: custom,
+          control: { type: "color", key: `colour:${lib.id}`, defaultValue: FULL_BASES[i % FULL_BASES.length] } })),
+        { name: "Accent", desc: "The starting colour for charts with many parts (genres, styles, artists, labels) and for value scales.", visible: custom,
+          control: { type: "color", key: "accent", defaultValue: DEFAULT_ACCENT } },
+      ] },
+      { type: "group", heading: "Sync", items: [
+        { name: "Download all images", aliases: ["Covers", "Gallery"], desc: "On: save every Discogs photo of a new record (back cover, labels, inserts). Off: save only its front cover.",
+          control: { type: "toggle", key: "gallery" } },
+      ] },
+      { type: "group", heading: "PDF export", items: [
+        { name: "Paper size", control: { type: "dropdown", key: "pdfSize", options: Object.fromEntries(Object.keys(PAPER).map((k) => [k, `${k} (${PAPER[k][0]} × ${PAPER[k][1]} in)`])) } },
+        { name: "Orientation", control: { type: "dropdown", key: "pdfOrientation", options: { portrait: "Portrait", landscape: "Landscape" } } },
+      ] },
+      // The About block is not a setting: kept out of search, it takes over its row.
+      { name: "About Discogs music sync and dashboard", searchable: false, render: (s) => {
+        s.settingEl.empty(); s.settingEl.addClass("mls-about-row");
+        this.aboutFooter(s.settingEl);
+      } },
+    ];
+  }
 
-    if (!d.username || !saved.discogs || !d.libraries.length) {
-      const g = el.createDiv({ cls: "mls-getting-started" });
-      g.createEl("strong", { text: "Getting started" });
-      const ol = g.createEl("ol");
-      [["Enter your Discogs username and paste a personal access token below, then press Test.", d.username && saved.discogs],
-       ["Under Bases, press “Set up from Discogs” and tick the formats to sync, such as Vinyl and CD.", d.libraries.length > 0],
-       ["Run “Sync from Discogs” from the command palette, then press the disc icon in the ribbon to open the Music Dashboard.", false]]
-        .forEach(([t, done]) => ol.createEl("li", { text: t, cls: done ? "is-done" : "" }));
+  getControlValue(key) {
+    const d = this.plugin.data;
+    if (key.startsWith("section:")) return d.sections[key.slice(8)] !== false;
+    if (key.startsWith("colour:")) return d.colours.bases[key.slice(7)];
+    switch (key) {
+      case "folder": return d.folder;
+      case "username": return d.username;
+      case "lyrics": return d.lyrics;
+      case "gallery": return d.gallery;
+      case "colourMode": return d.colours.mode;
+      case "accent": return d.colours.accent;
+      case "pdfSize": return d.pdf.size;
+      case "pdfOrientation": return d.pdf.orientation;
+      default: return undefined;
     }
+  }
 
-    new Setting(el).setName("Discogs").setHeading();
-    new Setting(el).setName("Library folder")
-      .setDesc("Where new bases get their folders, and where removed records and PDF exports go. Existing bases keep their folders.")
-      .addText((t) => {
-        t.setPlaceholder(DEFAULT_FOLDER).setValue(d.folder);
-        t.inputEl.addEventListener("change", async () => {
-          const f = cleanFolder(t.getValue());
-          if (!f || f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) {
-            new Notice("Choose a folder name without \\ : * ? \" < > | # ^ [ ] and not starting with a dot"); t.setValue(d.folder); return;
-          }
-          d.folder = f; t.setValue(f); await P.save();
-        });
+  async setControlValue(key, value) {
+    const P = this.plugin, d = P.data;
+    if (key.startsWith("section:")) { if (value) delete d.sections[key.slice(8)]; else d.sections[key.slice(8)] = false; }
+    else if (key.startsWith("colour:")) d.colours.bases[key.slice(7)] = String(value);
+    else switch (key) {
+      case "folder": if (folderProblem(value)) return; d.folder = cleanFolder(value); break;   // validate has already said why
+      case "username": d.username = String(value).trim(); P.formatCache = null; break;
+      case "lyrics": d.lyrics = value === true; break;
+      case "gallery": d.gallery = value === true; break;
+      case "colourMode": d.colours.mode = COLOUR_MODES[value] ? value : "theme"; break;
+      case "accent": d.colours.accent = String(value); break;
+      case "pdfSize": d.pdf.size = PAPER[value] ? value : "A4"; break;
+      case "pdfOrientation": d.pdf.orientation = value === "landscape" ? "landscape" : "portrait"; break;
+      default: return;
+    }
+    await P.save();
+    if (key.startsWith("section:") || key.startsWith("colour") || key === "accent") P.redrawViews();
+    this.refreshDomState();                         // the setup button and the custom colours follow these values
+  }
+
+  // Files from earlier versions are found on disk, so after the tab is drawn; it is redrawn if there are any.
+  async checkLegacy() {
+    const found = await this.plugin.legacyFilesPresent();
+    if (found.join("\n") === this.legacy.join("\n")) return;
+    this.legacy = found;
+    if (this.containerEl.isConnected) this.update();          // otherwise the next showing draws them
+  }
+
+  // The first steps, ticked off as they are done; shown until there is a token, a username and a base.
+  gettingStarted(s) {
+    const P = this.plugin, d = P.data;
+    s.settingEl.empty();
+    const g = s.settingEl.createDiv({ cls: "mls-getting-started" });
+    g.createEl("strong", { text: "Getting started" });
+    const ol = g.createEl("ol");
+    for (const [t, done] of [
+      ["Enter your Discogs username and paste a personal access token below, then press Test.", !!d.username && !!P.token("discogs")],
+      ["Under Bases, press “Set up from Discogs” and tick the formats to sync, such as Vinyl and CD.", d.libraries.length > 0],
+      ["Run “Sync from Discogs” from the command palette, then press the disc icon in the ribbon to open the dashboard.", false],
+    ]) ol.createEl("li", { text: t, cls: done ? "is-done" : "" });
+  }
+
+  // A token is kept in Obsidian's secret storage on this device: never in a file, the vault or the plugin's settings.
+  tokenRow(s, kind, service, test) {
+    const P = this.plugin, saved = !!P.token(kind);
+    s.descEl.createDiv({ text: saved ? "A token is saved on this device." : "No token saved yet." });
+    s.addText((t) => {
+      t.inputEl.type = "password";
+      t.setPlaceholder(saved ? "Paste a new token to replace it" : "Paste the token here");
+      // saved when the field is left, not on every keystroke, so a half-pasted token is never stored
+      t.inputEl.addEventListener("change", () => {
+        const x = t.getValue().trim(); if (!x) return;
+        P.saveToken(kind, x); new Notice(`${service} token saved on this device`); this.update();
       });
-    new Setting(el).setName("Username").setDesc("The Discogs account whose collection is synced.")
-      .addText((t) => t.setPlaceholder("your-discogs-name").setValue(d.username || "").onChange(async (x) => { d.username = x.trim(); P.formatCache = null; await P.save(); }));
-    this.token(el, saved.discogs, "Personal access token", "discogs",
-      "Required. Create one at discogs.com → Settings → Developers.", "Discogs", async () => {
-        const who = await P.discogsIdentity();
-        if (!d.username) { d.username = who; await P.save(); redraw(); }
-        return who.toLowerCase() === (d.username || "").toLowerCase() ? `Connected as ${who}` : `The token belongs to ${who}, but the username above is ${d.username}`;
-      });
-
-    new Setting(el).setName("Lyrics").setHeading();
-    new Setting(el).setName("Add Genius lyrics links").setDesc("Look up each track on Genius when a record is added. Needs a Genius token.")
-      .addToggle((t) => t.setValue(d.lyrics).onChange(async (x) => { d.lyrics = x; await P.save(); }));
-    this.token(el, saved.genius, "Genius access token", "genius",
-      "Optional. Create a client at genius.com/api-clients and generate an access token.", "Genius", async () => { await P.geniusCheck(); return "Genius accepted the token"; });
-
-    new Setting(el).setName("Bases").setHeading();
-    el.createEl("p", { cls: "setting-item-description",
-      text: "Each base takes the records of the formats you choose, from anywhere in your Discogs collection, into its own folder in Music, with its own place in the Library and on the Dashboard. Names must be unique." });
-    if (!d.libraries.length) el.createEl("p", { cls: "setting-item-description", text: "No bases yet." });
-    for (const lib of d.libraries) {
-      const row = new Setting(el).setName(lib.name)
-        .setDesc(`Takes ${lib.formats.join(", ")} records → ${lib.dir} · #${lib.tag}`)
-        .addExtraButton((b) => b.setIcon("pencil").setTooltip("Rename or edit").onClick(() => new LibraryModal(this.app, P, lib, redraw).open()))
-        .addExtraButton((b) => b.setIcon("trash-2").setTooltip("Stop syncing this base")
-          .onClick(() => new ConfirmModal(this.app, `Stop syncing “${lib.name}”?`,
-            `It disappears from the sync, the Library and the Dashboard. ${lib.dir} and its notes stay in your vault — delete them yourself if you no longer want them.`,
-            "Stop syncing", async () => { await P.removeLibrary(lib); redraw(); }).open()));
-      setIcon(row.nameEl.createSpan({ cls: "mls-lib-icon", prepend: true }), lib.icon);
-    }
-    new Setting(el)
-      .addButton((b) => b.setButtonText("Set up from Discogs").setDisabled(!d.username || !saved.discogs)
-        .setTooltip(d.username && saved.discogs ? "Choose formats from your collection to add as bases" : "Enter your username and token first")
-        .onClick(() => new SetupModal(this.app, P, redraw).open()))
-      .addButton((b) => b.setButtonText("Add base").setCta().onClick(() => new LibraryModal(this.app, P, null, redraw).open()));
-
-    if (legacy.length) {
-      new Setting(el).setName("Files from earlier versions").setHeading();
-      el.createEl("p", { cls: "setting-item-description",
-        text: "Earlier versions kept these in your vault. The plugin no longer uses them: the Dashboard and Library views, and tokens kept on this device, have replaced them." });
-      const ul = el.createEl("ul", { cls: "mls-legacy-list" });
-      for (const f of legacy) ul.createEl("li", { text: f });
-      new Setting(el).addButton((b) => b.setButtonText("Move to trash").setWarning().onClick(() => new ConfirmModal(this.app, "Move these files to the trash?",
-        `${legacy.join(", ")}. They go to your system trash, so you can get them back.`, "Move to trash",
-        async () => { await P.trashLegacyFiles(legacy); new Notice("Moved to the trash"); redraw(); }).open()));
-    }
-
-    new Setting(el).setName("Dashboard").setHeading();
-    el.createEl("p", { cls: "setting-item-description", text: "Choose the sections the dashboard and its PDF show." });
-    for (const [key, label] of SECTIONS) new Setting(el).setName(label)
-      .addToggle((t) => t.setValue(d.sections[key] !== false).onChange(async (x) => {
-        if (x) delete d.sections[key]; else d.sections[key] = false;
-        await P.save(); P.redrawViews();
-      }));
-
-    new Setting(el).setName("Colours").setHeading();
-    new Setting(el).setName("Chart colours")
-      .setDesc("Theme uses shades of your theme's colours. Full colour is the plugin's original purple, pink and orange. Custom lets you choose. Text, lines and backgrounds always follow your theme.")
-      .addDropdown((dd) => {
-        for (const [k, v] of Object.entries(COLOUR_MODES)) dd.addOption(k, v);
-        dd.setValue(d.colours.mode).onChange(async (x) => { d.colours.mode = x; await P.save(); P.redrawViews(); redraw(); });
-      });
-    if (d.colours.mode === "custom") {
-      d.libraries.forEach((lib, i) => new Setting(el).setName(lib.name).setDesc("This base's colour in every chart and label.")
-        .addColorPicker((cp) => cp.setValue(d.colours.bases[lib.id] || FULL_BASES[i % FULL_BASES.length])
-          .onChange(async (x) => { d.colours.bases[lib.id] = x; await P.save(); P.redrawViews(); })));
-      new Setting(el).setName("Accent").setDesc("The starting colour for charts with many parts (genres, styles, artists, labels) and for value scales.")
-        .addColorPicker((cp) => cp.setValue(d.colours.accent || DEFAULT_ACCENT).onChange(async (x) => { d.colours.accent = x; await P.save(); P.redrawViews(); }));
-    }
-
-    new Setting(el).setName("Sync").setHeading();
-    new Setting(el).setName("Download all images").setDesc("On: save every Discogs photo of a new record (back cover, labels, inserts). Off: save only its front cover.")
-      .addToggle((t) => t.setValue(d.gallery).onChange(async (x) => { d.gallery = x; await P.save(); }));
-
-    new Setting(el).setName("PDF export").setHeading();
-    new Setting(el).setName("Paper size").addDropdown((dd) => {
-      Object.keys(PAPER).forEach((k) => dd.addOption(k, `${k} (${PAPER[k][0]} × ${PAPER[k][1]} in)`));
-      dd.setValue(d.pdf.size).onChange(async (x) => { d.pdf.size = x; await P.save(); });
     });
-    new Setting(el).setName("Orientation").addDropdown((dd) => {
-      dd.addOption("portrait", "Portrait").addOption("landscape", "Landscape");
-      dd.setValue(d.pdf.orientation).onChange(async (x) => { d.pdf.orientation = x; await P.save(); });
-    });
-
-    const about = new Setting(el).settingEl;
-    about.empty(); about.addClass("mls-about-row");
-    this.aboutFooter(about);
+    s.addButton((b) => b.setButtonText("Test").setDisabled(!saved).onClick(async () => {
+      b.setDisabled(true); b.setButtonText("Testing…");
+      try { new Notice(await test(), 6000); } catch (e) { new Notice(e.message, 8000); }
+      b.setDisabled(false); b.setButtonText("Test");
+    }));
   }
 
   // The About / Support footer shared with the other Wolf 359 Press plugins.
@@ -1120,29 +1195,7 @@ class MusicSettingTab extends PluginSettingTab {
       b.addEventListener("click", () => window.open(link.url, "_blank", "noopener"));
     }
   }
-
-  // A token is kept in Obsidian's local storage on this device: never in a file, the vault or the plugin's settings.
-  token(el, saved, name, kind, desc, service, test) {
-    const P = this.plugin;
-    const s = new Setting(el).setName(name).setDesc(`${desc} ${saved ? "A token is saved on this device." : "No token saved yet."}`);
-    s.addText((t) => {
-      t.inputEl.type = "password";
-      t.setPlaceholder(saved ? "Paste a new token to replace it" : "Paste the token here");
-      t.inputEl.addEventListener("change", async () => {
-        const x = t.getValue().trim(); if (!x) return;
-        P.saveToken(kind, x); new Notice(`${service} token saved on this device`); this.display();
-      });
-    });
-    s.addButton((b) => b.setButtonText("Test").setDisabled(!saved).onClick(async () => {
-      b.setDisabled(true); b.setButtonText("Testing…");
-      try { new Notice(await test(), 6000); } catch (e) { new Notice(e.message, 8000); }
-      b.setDisabled(false); b.setButtonText("Test");
-    }));
-  }
 }
 
-module.exports = MusicLibrarySync;
-module.exports.Engine = Engine;          // exported for testing
-module.exports.vaultFiles = vaultFiles;
-module.exports.openNote = openNote;
-module.exports.MusicView = MusicView;          // exported for testing
+export default MusicLibrarySync;
+export { Engine, vaultFiles, openNote, MusicView };          // exported for testing

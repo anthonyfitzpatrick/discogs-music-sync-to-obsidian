@@ -20,7 +20,7 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 
 ## Requirements
 
-- Obsidian 1.9 or later, desktop only (macOS, Windows or Linux).
+- Obsidian 1.13 or later, desktop only (macOS, Windows or Linux).
 - A Discogs account and a personal access token.
 - Optional: a Genius API access token, for lyrics links.
 
@@ -45,7 +45,7 @@ The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 ## Privacy and security
 
 - The plugin talks only to `api.discogs.com` and `api.genius.com`, and only when you start a sync, a price or value refresh, set up or edit bases, or test a token.
-- Tokens are kept in Obsidian's local storage for the vault on this device: never in a file, the vault or the plugin's `data.json`, so never in git or a shared sync.
+- Tokens are kept in Obsidian's secret storage on this device, encrypted by the operating system: never in a file, the vault or the plugin's `data.json`, so never in git or a shared sync.
 - Nothing is sent anywhere else, and there is no telemetry.
 
 ## Known limitations

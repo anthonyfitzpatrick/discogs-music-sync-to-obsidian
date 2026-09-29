@@ -1,0 +1,15 @@
+{
+  "//": "Only for linting: lets the Obsidian lint rules read the JavaScript source with type information. Nothing is compiled.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "es2022",
+    "module": "es2022",
+    "moduleResolution": "node",
+    "lib": ["es2022", "dom", "dom.iterable"],
+    "types": [],
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.js"]
+}

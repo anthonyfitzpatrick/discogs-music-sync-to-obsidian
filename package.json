@@ -1,13 +1,13 @@
 {
   "name": "discogs-music-sync-to-obsidian",
-  "version": "0.12.4",
+  "version": "0.13.0",
   "description": "Discogs music sync and dashboard: an Obsidian plugin that syncs a Discogs collection into album notes, bases and a Music Dashboard.",
   "private": true,
   "license": "MIT",
   "author": "Anthony Fitzpatrick",
   "scripts": {
     "build": "node esbuild.config.mjs",
-    "lint": "oxlint --deny-warnings",
+    "lint": "oxlint --deny-warnings && eslint src --max-warnings 0",
     "test": "npm run build && node --test \"tests/*.test.js\"",
     "check": "npm run lint && npm test",
     "prepare": "git config core.hooksPath hooks"
@@ -15,6 +15,11 @@
   "devDependencies": {
     "@oxlint/plugins": "^1.78.0",
     "esbuild": "^0.28.2",
-    "oxlint": "^1.78.0"
+    "eslint": "^10.11.0",
+    "eslint-plugin-obsidianmd": "^0.4.2",
+    "obsidian": "^1.13.1",
+    "oxlint": "^1.78.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.0"
   }
 }

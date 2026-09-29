@@ -2,7 +2,7 @@
 // each table column shows. The views are the ones the .base files used to provide. No Obsidian
 // dependency, so it is tested directly; views.js draws the result.
 
-const { kr } = require("./report.js");
+import { kr } from "./report.js";
 
 const text = (v) => (v === null || v === undefined ? "" : String(v));
 const money = (v) => (v === null || v === undefined ? "" : kr(v));
@@ -74,4 +74,4 @@ function libraryGroups(records, base, viewKey, search, sortKey) {
   return [...groups].sort((a, b) => a[0].localeCompare(b[0])).map(([name, rs]) => ({ name, records: rs }));
 }
 
-module.exports = { COLUMNS, VIEWS, SORTS, SIZES, DEFAULT_SIZE, libraryGroups };
+export { COLUMNS, VIEWS, SORTS, SIZES, DEFAULT_SIZE, libraryGroups };

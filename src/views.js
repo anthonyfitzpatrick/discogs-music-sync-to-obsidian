@@ -2,9 +2,9 @@
 // two tabs below it — the Dashboard and the Library. It replaces the dashboard note (Dataview +
 // Charts) and the .base files (Obsidian Bases) of earlier versions, so the plugin needs no other
 // plugin and puts nothing but record notes and their images in the vault.
-const { ItemView, setIcon } = require("obsidian");
-const { reportParts } = require("./report.js");
-const { COLUMNS, VIEWS, SORTS, SIZES, DEFAULT_SIZE, libraryGroups } = require("./library.js");
+import { ItemView, setIcon } from "obsidian";
+import { reportParts } from "./report.js";
+import { COLUMNS, VIEWS, SORTS, SIZES, DEFAULT_SIZE, libraryGroups } from "./library.js";
 
 const MUSIC_VIEW = "music-library-sync-music";
 // View types of 0.11.0, when the dashboard and library were separate: still registered so tabs left
@@ -86,7 +86,6 @@ class MusicView extends ItemView {
 class DashboardPane {
   constructor(view, el) {
     this.view = view; this.plugin = view.plugin; this.el = el;
-    this.styleEl = el.createEl("style");
     this.reportEl = el.createDiv({ cls: "mls-report" });
     // Album titles open their notes; ticking Listened records it in the note.
     view.registerDomEvent(this.reportEl, "click", (e) => {
@@ -100,11 +99,11 @@ class DashboardPane {
   }
 
   async render() {
-    const theme = { ...this.plugin.themeForReport(), font: "inherit" };
-    const { body, css } = reportParts(await this.plugin.collectRecords(), this.plugin.baseNames(), this.plugin.collectionValue(), theme, true, this.plugin.reportOptions());
-    if (body + css === this.shown) return;          // nothing on the dashboard changed: leave it be
-    this.shown = body + css;
-    this.styleEl.setText(css);
+    // The report's styles are in styles.css; the theme's colours are drawn into the charts, so a theme
+    // change shows as a changed body.
+    const { body } = reportParts(await this.plugin.collectRecords(), this.plugin.baseNames(), this.plugin.collectionValue(), this.plugin.themeForReport(), true, this.plugin.reportOptions());
+    if (body === this.shown) return;          // nothing on the dashboard changed: leave it be
+    this.shown = body;
     // The report is built as markup with every value escaped (report.js); parsed here into nodes.
     const parsed = new DOMParser().parseFromString(`<div>${body}</div>`, "text/html").body.firstElementChild;
     this.reportEl.empty();
@@ -158,7 +157,7 @@ class LibraryPane {
     const total = new Set(groups.flatMap((g) => g.records.map((r) => r.path))).size;
     this.countEl.setText(`${total} record${total === 1 ? "" : "s"}`);
     this.listEl.empty();
-    if (!names.length) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No bases yet. Add one in Settings → Discogs music sync and dashboard, then run Sync from Discogs." }); return; }
+    if (!names.length) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No bases yet. Add one in this plugin's settings, then sync from Discogs." }); return; }
     if (!total) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No records match." }); return; }
     const view = VIEWS[state.view] || VIEWS.gallery;
     this.sizeSelect.parentElement.toggle(!!view.cards);
@@ -202,4 +201,4 @@ class LibraryPane {
   }
 }
 
-module.exports = { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote };
+export { MusicView, MUSIC_VIEW, OLD_VIEWS, openNote };

@@ -484,48 +484,29 @@ function reportParts(records, media, value, theme, interactive, options = {}) {
     },
   };
 
-  const R = ".mls-report";
-  const css = `
-    ${R} { color: ${P.fg}; font-family: ${theme.font}; font-size: 12px; }
-    ${R} .sub { color: ${P.muted}; font-size: 11px; margin: 2px 0 10px; }
-    ${R} .note { color: ${P.muted}; margin: 4px 0; }
-    ${R} section { margin-bottom: 18px; break-inside: auto; }
-    ${R} h2 { font-size: 17px; margin: 0 0 2px; padding-left: 10px; border-left: 5px solid ${P.fg}; break-after: avoid; color: ${P.fg}; }
-    ${R} .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); gap: 12px; }
-    ${R} .card { border: 1px solid ${P.border}; border-radius: 8px; padding: 10px 12px; margin-bottom: 12px; break-inside: avoid; }
-    ${R} .grid > .card { margin-bottom: 0; }
-    ${R} .grid + .card { margin-top: 12px; }
-    ${R} .card-title { font-weight: 700; margin-bottom: 6px; }
-    ${R} svg { display: block; width: 100%; height: auto; }
-    ${R} table { width: 100%; border-collapse: collapse; margin: 0; }
-    ${R} th { text-align: left; color: ${P.muted}; font-weight: 600; border-bottom: 1px solid ${P.border}; padding: 4px 6px; }
-    ${R} td { padding: 4px 6px; border-bottom: 1px solid ${P.border}; vertical-align: middle; color: ${P.fg}; }
-    ${R} tr { break-inside: avoid; }
-    ${R} .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    ${R} tr.total td { font-weight: 800; border-top: 2px solid ${P.border}; border-bottom: none; }
-    ${R} .pill { font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 999px; white-space: nowrap; }
-    ${R} a.mls-open { color: ${P.fg}; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }`;
   const shown = SECTIONS.filter(([key]) => on(key));
   const body = !recs.length ? section("No records", "", `<p>No record notes found in ${esc(media.join(", ") || "any base")}. Run Sync from Discogs.</p>`)
     : shown.length ? shown.map(([key]) => build[key]()).join("")
       : section("No sections", "", note("Every dashboard section is turned off. Turn some on in Settings → Discogs music sync and dashboard → Dashboard."));
-  return { body, css };
+  return { body };
 }
 
-// The dashboard as a standalone page, for PDF export. options: as for reportParts.
+// The dashboard as a standalone page, for PDF export. options: as for reportParts, plus css, the
+// plugin's styles.css, which holds the report's rules; the page sets its variables to the theme's colours.
 function buildReport(records, media, value, theme, stamp, options = {}) {
-  const { body, css } = reportParts(records, media, value, theme, false, options);
+  const { body } = reportParts(records, media, value, theme, false, options);
   const P = palette(theme, options.colours);
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Music Dashboard</title><style>
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Music Dashboard</title><style>${options.css ?? ""}
+    .mls-report { --mls-fg: ${P.fg}; --mls-muted: ${P.muted}; --mls-border: ${P.border}; --mls-font: ${theme.font}; }
     @page { margin: 0; }
     html, body { background: ${P.bg}; margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     header { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 3px solid ${P.fg}; padding-bottom: 8px; margin-bottom: 14px; }
     header h1 { margin: 0; font-size: 26px; }
-    header span { color: ${P.muted}; }${css}</style></head><body>
+    header span { color: ${P.muted}; }</style></head><body>
 <div class="mls-report"><header><h1>Music Dashboard</h1><span>Exported ${esc(stamp)}</span></header>
 ${body}</div>
 </body></html>`;
 }
 
-module.exports = { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, esc, kr,
+export { primaryFormat, decodeRecord, decodeCollectionValue, cssColorToHex, buildReport, reportParts, tracklist, palette, esc, kr,
   SECTIONS, COLOUR_MODES, FULL_BASES, DEFAULT_ACCENT };
