@@ -94,7 +94,7 @@ BRAT checks for new releases when Obsidian starts.
 1. Sign in at [discogs.com](https://www.discogs.com) and open [discogs.com/settings/developers](https://www.discogs.com/settings/developers) (Settings → Developers).
 2. Press **Generate new token** and copy it.
 
-The plugin's settings link to the same page, under the token field, with these steps under **How to get a token**.
+The plugin's settings link to the same page, under the token field, with these steps under **How to get a token**. Until you are set up, **Getting started** at the top of the settings lists each step (username, Discogs token, Genius token, first sync) and crosses it out as you do it.
 
 The token gives read access to your account. Treat it like a password.
 
@@ -146,8 +146,8 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 
 - **Library folder**: the folder new bases get their folders in, and where removed records and PDF exports go. It is `Music` unless you change it, and can be anywhere in your vault, such as `Collections/Records`. Bases you already have keep their folders. A name Obsidian can't use (one starting with a dot, or containing `\ : * ? " < > | # ^ [ ]`) is shown in red under the field and isn't saved.
 - **Username**: the Discogs account whose collection is synced.
-- **Personal access token**: paste your token into the field. It is saved on this device and checked with Discogs straight away, and the answer appears under the field. (A typed token is saved and checked when you press Enter or leave the field.) The field is masked and empties once the token is saved. Paste a new token at any time to replace it.
-- **Test**: checks the saved token again, or saves and checks whatever is in the field, in one press.
+- **Personal access token**: paste your token into the field. It is saved on this device at once and the field empties; "Saved on this device. Press Test to check it." appears under it. (A typed token is saved when you press Enter or leave the field.) The field is masked. Paste a new token at any time to replace it.
+- **Test**: checks the saved token with Discogs, and the answer appears under the field. If there is still a token in the field, Test saves it first, so one press is enough.
   - "✓ Connected to Discogs as *name*" means everything is fine.
   - "✗ The token belongs to *X*, but the username above is *Y*" means the token and username don't match. Syncing uses the username, so fix whichever is wrong.
   - "✗ Discogs didn't accept the token" means the token is wrong or has been revoked. Generate a new one and paste it.
@@ -156,7 +156,7 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 ### 5.2 Lyrics
 
 - **Add Genius lyrics links**: when on, each track of a newly added record is looked up on Genius. Turn it off to make syncing faster.
-- **Genius access token** and **Test**: work the same way as the Discogs token: paste it, and the answer from Genius appears under the field.
+- **Genius access token** and **Test**: work the same way as the Discogs token: paste it, then press Test for Genius's answer.
 
 ### 5.3 Bases
 

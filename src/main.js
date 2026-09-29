@@ -22,7 +22,7 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "0.14.2";
+const VERSION = "0.14.3";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat } from "./bases.js";
@@ -39,13 +39,13 @@ const TOKEN_HELP = {
   discogs: { url: "https://www.discogs.com/settings/developers", link: "discogs.com/settings/developers",
     steps: ["Sign in to Discogs, then open the link above: it goes straight to Settings → Developers.",
       "Press “Generate new token”.",
-      "Copy the token and paste it into the field here. It is checked with Discogs straight away."],
+      "Copy the token, paste it into the field here and press Test."],
     note: "The token lets the plugin read your collection and prices. Treat it like a password." },
   genius: { url: "https://genius.com/api-clients", link: "genius.com/api-clients",
     steps: ["Sign in to Genius, then open the link above: it goes straight to your API clients.",
       "Press “New API Client”. Any app name and website address will do, such as “Obsidian” and https://obsidian.md.",
       "Save it, then press “Generate Access Token” under the new client.",
-      "Copy the token and paste it into the field here. It is checked with Genius straight away."],
+      "Copy the token, paste it into the field here and press Test."],
     note: "The token is only used to look up lyrics pages. Treat it like a password." },
 };
 
@@ -1172,7 +1172,7 @@ class MusicSettingTab extends PluginSettingTab {
     }
     await P.save();
     if (key.startsWith("section:") || key.startsWith("colour") || key === "accent") P.redrawViews();
-    this.refreshDomState();                         // the setup button and the custom colours follow these values
+    this.refreshStarted();                          // getting started, the setup button and the custom colours follow these values
   }
 
   // Files from earlier versions are found on disk, so after the tab is drawn; it is redrawn if there are any.
@@ -1184,23 +1184,32 @@ class MusicSettingTab extends PluginSettingTab {
   }
 
   // The first steps, ticked off as they are done; shown until there is a token, a username and a base.
+  // Each step is crossed out as it is done, as it happens: refreshStarted() is called whenever a
+  // username or token is saved.
   gettingStarted(s) {
     const P = this.plugin, d = P.data;
     s.settingEl.empty();
     const g = s.settingEl.createDiv({ cls: "mls-getting-started" });
     g.createEl("strong", { text: "Getting started" });
     const ol = g.createEl("ol");
-    for (const [t, done] of [
-      ["Enter your Discogs username and paste a personal access token below, then press Test.", !!d.username && !!P.token("discogs")],
-      ["Run “Sync from Discogs” from the command palette. It creates a base for each format in your collection, such as Vinyl and CD, and fills them.", d.libraries.length > 0],
-      ["Press the disc icon in the ribbon to open the dashboard and library.", false],
-    ]) ol.createEl("li", { text: t, cls: done ? "is-done" : "" });
+    this.startedSteps = [
+      ["Enter your Discogs username below.", () => !!d.username],
+      ["Add your Discogs token: open the link under “Personal access token”, generate a token, paste it into the field and press Test.", () => !!P.token("discogs")],
+      ["Optional, for lyrics links: add your Genius token the same way, under “Genius access token”.", () => !!P.token("genius")],
+      ["Run “Sync from Discogs” from the command palette. It creates a base for each format in your collection, such as Vinyl and CD, and fills them.", () => d.libraries.length > 0],
+      ["Press the disc icon in the ribbon to open the dashboard and library.", () => false],
+    ].map(([t, done]) => [ol.createEl("li", { text: t }), done]);
+    this.refreshStarted();
+  }
+  refreshStarted() {
+    for (const [li, done] of this.startedSteps ?? []) if (li.isConnected) li.toggleClass("is-done", done());
+    this.refreshDomState();                                   // the list shows until the required steps are done
   }
 
   // A token is kept in Obsidian's secret storage on this device: never in a file, the vault or the plugin's settings.
-  // Pasting a token saves it and checks it with the service at once; so does Enter, leaving the field, or
-  // Test, which also checks a token already saved. The answer shows under the field, and is kept when
-  // the tab redraws.
+  // Pasting a token saves it (as do Enter and leaving the field); Test checks it with the service, saving
+  // first whatever is in the field, so one press is enough. Saving doesn't redraw the tab, so a click on
+  // Test is never lost. The answer shows under the field, and is kept when the tab redraws.
   tokenRow(s, kind, service, test) {
     const P = this.plugin, help = TOKEN_HELP[kind];
     // the description with a link to where the token is made, and the steps, folded away until wanted
@@ -1221,9 +1230,18 @@ class MusicSettingTab extends PluginSettingTab {
     const kept = this.tokenStatus[kind];
     if (kept) show(kept.text, kept.state); else show(P.token(kind) ? "A token is saved on this device." : "No token saved yet.");
     let input, button, run = 0;
-    const check = async () => {
+    const save = () => {
       const typed = input.getValue().trim();
-      if (typed) { P.saveToken(kind, typed); input.setValue(""); input.setPlaceholder("Paste to replace"); }
+      if (!typed) return false;
+      P.saveToken(kind, typed); input.setValue(""); input.setPlaceholder("Paste to replace");
+      run++;                                                   // any check still running was for the old token
+      button.setDisabled(false).setButtonText("Test");
+      show("Saved on this device. Press Test to check it.");
+      this.refreshStarted();
+      return true;
+    };
+    const check = async () => {
+      const typed = save();
       if (!P.token(kind)) { show("No token saved yet. Paste one into the field.", "error"); return; }
       const mine = ++run;                                      // a newer check replaces this one's answer
       button.setDisabled(true).setButtonText("Checking…");
@@ -1239,10 +1257,10 @@ class MusicSettingTab extends PluginSettingTab {
       input = t;
       t.inputEl.type = "password";
       t.setPlaceholder(P.token(kind) ? "Paste to replace" : "Paste token here");
-      // A pasted token is complete: it is saved and checked straight away. A typed one waits for Enter
-      // or leaving the field, so a half-typed token is never stored.
-      t.inputEl.addEventListener("paste", () => window.setTimeout(() => void check(), 0));
-      t.inputEl.addEventListener("change", () => { if (t.getValue().trim()) void check(); });
+      // A pasted token is complete, so it is saved at once. A typed one waits for Enter or leaving the
+      // field, so a half-typed token is never stored.
+      t.inputEl.addEventListener("paste", () => window.setTimeout(save, 0));
+      t.inputEl.addEventListener("change", save);
     });
     s.addButton((b) => { button = b; b.setButtonText("Test").onClick(() => void check()); });
   }
