@@ -1,6 +1,6 @@
 # Discogs music sync and dashboard
 
-An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, with a Music Dashboard and a Music Library built in. It needs no other plugin, and puts nothing in your vault except your record notes and their images.
+An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, with a Music Dashboard and a Music Library built in. It needs no other plugin, and puts nothing in your vault except your record notes, their images and the PDFs you export.
 
 The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its folder in `.obsidian/plugins/`, is `music-library-sync`.
 
@@ -8,7 +8,7 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 
 - **One note per record.** Each note gets the front cover and every other Discogs photo, the tracklist with track lengths, label, catalogue number, country, format, genres and styles, your media and sleeve condition, and Discogs price data in SEK.
 - **Genius lyrics links.** Each track links to its lyrics on Genius where a match is found.
-- **Bases, sorted by format.** Each base takes the records of the formats you choose (Vinyl, CD, Cassette…) from anywhere in your Discogs collection, into its own folder with its own tag. Placement is automatic: you don't need to file records into folders on Discogs, and formats are picked from the ones in your collection, never typed.
+- **Bases, sorted by format.** The first sync creates a base for each format in your collection (Vinyl, CD, Cassette…), each with its own folder and tag, and later syncs do the same for new formats. Every record goes to the base for its format, from anywhere in your Discogs collection: you don't need to file records into folders on Discogs, and formats are Discogs' own names, never typed. You can rename, merge or stop syncing bases.
 - **Safe syncing.** A sync only adds records. It never overwrites a note you've edited. Records you remove from Discogs are moved to a *Removed from collection* folder, never deleted.
 - **Price refresh.** Updates only the price fields on every record, leaving everything else alone.
 - **One Music view, two tabs.** The disc icon opens the plugin's own view, with the sync panel at the top and a Dashboard tab and a Library tab.
@@ -17,6 +17,7 @@ The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its fol
 - **Library.** Browse your records by base: a gallery of covers, by genre, a catalogue table or a value table, with search and sorting.
 - **PDF export.** Saves the dashboard as a PDF in the paper size and orientation you choose.
 - **Sync panel.** Buttons, progress and a log at the top of the dashboard, or in any note through a `music-sync` code block.
+- **Guided setup.** A Getting started list in settings, crossed off as you go, with links to where the Discogs and Genius tokens are made and the steps to make them.
 
 ## Requirements
 
@@ -34,8 +35,8 @@ No other plugin is needed.
 
 ## Quick start
 
-1. Open **Settings → Discogs music sync and dashboard**. Optionally choose the **Library folder** (`Music` unless you change it).
-2. Enter your Discogs username, paste your personal access token and press **Test**.
+1. Open **Settings → Discogs music sync and dashboard** and follow **Getting started** at the top. Optionally choose the **Library folder** (`Music` unless you change it).
+2. Enter your Discogs username. Paste your personal access token (the link under the field goes to the page that makes one) and press **Test**. Do the same for a Genius token if you want lyrics links.
 3. Press the disc icon in the ribbon to open **Music**, and press **Sync from Discogs**. The sync creates a base for each format in your collection (Vinyl, CD, Cassette…) and fills it.
 4. Switch between the **Dashboard** and **Library** tabs to see your collection.
 
@@ -52,7 +53,7 @@ The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 - Prices are in Swedish kronor (SEK).
 - Discogs price suggestions (the Low, Mid, High and Mint estimates) only appear once your Discogs Seller Settings are filled in. Without them, the dashboard uses the cheapest current listing instead.
 - Renaming a base doesn't move its notes to a folder of the new name.
-- Tokens are kept per device: enter them on each computer you use.
+- Tokens are kept per vault and per device: enter them in each vault, on each computer, where you sync.
 - Desktop only, because PDF export uses Electron.
 
 ## Feedback
@@ -65,14 +66,14 @@ The source is in `src/`. `npm run build` bundles it into `main.js`.
 
 ```
 npm install      # also points git at the pre-commit hook in hooks/
-npm run lint     # oxlint with the anti-slop rules
+npm run lint     # oxlint (anti-slop rules), then eslint (Obsidian's plugin review rules)
 npm test         # builds, then runs the tests in tests/
 npm run check    # both
 ```
 
-Lint uses the [anti-slop](https://github.com/dmmulroy/anti-slop) rule set, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`. The pre-commit hook and CI both run lint and the tests.
+Lint runs two rule sets, both with warnings treated as errors: the [anti-slop](https://github.com/dmmulroy/anti-slop) rules, vendored in `tools/oxlint/anti-slop/` and configured in `oxlint.config.mts`, and the rules Obsidian's plugin review uses ([eslint-plugin-obsidianmd](https://github.com/obsidianmd/eslint-plugin)), configured in `eslint.config.mjs`. The pre-commit hook and CI both run lint and the tests.
 
-To release, set the same version in `manifest.json`, `package.json` and `versions.json`, commit, and push a tag with that version (for example `0.9.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`.
+To release, set the same version in `manifest.json`, `package.json`, `versions.json` (mapped to the minimum Obsidian version) and `VERSION` in `src/main.js`; a test checks they agree. Commit, then push a tag with that version (for example `0.15.0`). GitHub Actions tests the build and publishes a release with `main.js`, `manifest.json` and `styles.css`. Pushing a tag publishes: push branches only until a release is wanted.
 
 ## License
 

@@ -37,7 +37,7 @@ For every record in your Discogs collection, the plugin creates a note with:
 - your media and sleeve condition, and your notes, from Discogs,
 - current Discogs prices in Swedish kronor.
 
-Records are grouped into **bases** by their format — by default **Vinyl**, **CDs** and **Tapes** — automatically, wherever they are in your Discogs collection.
+Records are grouped into **bases** by their format, such as **Vinyl**, **CD** or **Cassette**, automatically, wherever they are in your Discogs collection. The plugin creates a base for each format it finds in your collection; nothing is set up in advance.
 
 Everything else is inside the plugin:
 
@@ -46,7 +46,7 @@ Everything else is inside the plugin:
 - **PDF export** of the dashboard,
 - your **settings and tokens**.
 
-It needs no other plugin, and it puts nothing in your vault except your record notes and their images.
+It needs no other plugin, and it puts nothing in your vault except your record notes, their images and the PDFs you export.
 
 The plugin is careful with your notes:
 
@@ -74,7 +74,7 @@ No other plugin is needed.
 3. Open **Settings → Community plugins**. If Restricted mode is on, turn it off.
 4. Reload the list of installed plugins and turn on **Discogs music sync and dashboard**.
 
-To update, replace the three files with those from the newer release and turn the plugin off and on again (or restart Obsidian).
+To update, replace the three files with those from the newer release and turn the plugin off and on again (or restart Obsidian). Your settings and tokens are kept: they aren't in these files (see [section 14](#14-what-the-plugin-keeps-where)).
 
 ### 3.2 With BRAT
 
@@ -94,7 +94,7 @@ BRAT checks for new releases when Obsidian starts.
 1. Sign in at [discogs.com](https://www.discogs.com) and open [discogs.com/settings/developers](https://www.discogs.com/settings/developers) (Settings → Developers).
 2. Press **Generate new token** and copy it.
 
-The plugin's settings link to the same page, under the token field, with these steps under **How to get a token**. Until you are set up, **Getting started** at the top of the settings lists each step (username, Discogs token, Genius token, first sync) and crosses it out as you do it.
+The plugin's settings link to the same page, under the token field, with these steps under **How to get a token**.
 
 The token gives read access to your account. Treat it like a password.
 
@@ -108,13 +108,13 @@ The plugin's settings link to the same page, under the Genius token field, with 
 
 ### 4.3 Enter them in Obsidian
 
-1. Open **Settings → Discogs music sync and dashboard**. Until setup is done, the top of the page shows a **Getting started** list, and ticks off each step as you finish it.
+1. Open **Settings → Discogs music sync and dashboard**. Until setup is done, the top of the page shows a **Getting started** list: your username, your Discogs token, your Genius token (optional) and the first sync. Each step is crossed out as soon as you do it.
 2. Under **Discogs**, type your Discogs **Username**.
-3. Paste your Discogs token into **Personal access token** and press Enter or click elsewhere. The description changes to "A token is saved on this device."
-4. Press **Test**. You should see "Connected as *your name*".
-5. Under **Lyrics**, paste your Genius token into **Genius access token** and press **Test**.
+3. Paste your Discogs token into **Personal access token**. It is saved at once, the field empties, and "Saved on this device. Press Test to check it." appears under it.
+4. Press **Test**. You should see "✓ Connected to Discogs as *your name*".
+5. Under **Lyrics**, paste your Genius token into **Genius access token** and press **Test**. You should see "✓ Genius accepted the token".
 
-Tokens are kept by the plugin on this device, not in a file (see [section 16](#16-privacy-and-security)). If you use the vault on another computer, enter them there too.
+Tokens are kept in Obsidian's keychain for this vault on this device, not in a file (see [section 16](#16-privacy-and-security)). If you use the vault on another computer, or the plugin in another vault, enter them there too.
 
 ### 4.4 Set up your bases
 
@@ -133,6 +133,8 @@ Each format becomes a base with the format's name, for example `Vinyl` becomes t
 ### 4.5 Run the first sync
 
 Press the disc icon in the ribbon to open **Music**, then press **Sync from Discogs** at the top. You can also run **Discogs music sync and dashboard: Sync from Discogs** from the command palette.
+
+The sync first reads your collection and creates a base for each format in it; the progress steps on the panel then show one per base, plus the collection value. The **Sync log** lists each base it created, for example `+ New base Vinyl for Vinyl records → Music/Vinyl`.
 
 The first sync can take a while. Discogs allows about one request a second, and each record needs several requests: the release, its master, prices, cover and photos. Expect roughly 5 to 15 seconds per record, plus time for Genius lookups. A collection of 150 records takes about half an hour. Later syncs only fetch new records, so they are quick.
 
@@ -211,7 +213,7 @@ The bottom of the page shows the plugin's version, and buttons to report a bug, 
 
 ### 6.1 What a base is
 
-A base takes every record of the formats you choose, from anywhere in your Discogs collection, into:
+A base takes every record of its formats, from anywhere in your Discogs collection, into:
 
 - its own **folder** inside your library folder, which holds its record notes, a `covers/` folder and an `images/` folder,
 - its own **tag**, such as `#vinyl-library`, which every record note in it carries,
@@ -229,7 +231,9 @@ A base takes every record of the formats you choose, from anywhere in your Disco
 
 Say you've started collecting MiniDiscs and added some to your Discogs collection.
 
-1. Open **Settings → Discogs music sync and dashboard** and press **Add base**, or run **Discogs music sync and dashboard: Add a base…**.
+With **Create bases automatically** on, the next sync does this for you, creating a base called `Minidisc` after the format. To name it yourself or choose its formats first:
+
+1. Open **Settings → Discogs music sync and dashboard** and press **+** at the top of the bases list, or run **Discogs music sync and dashboard: Add a base…**.
 2. Enter a **Name**, for example `MiniDiscs`. This becomes the folder name and the name in the Library and on the Dashboard.
 3. Under **Formats**, turn on the formats the base takes, for example `Minidisc`. The dialog lists every format in your collection with its record count; formats another base already takes are shown as taken and can't be turned on. If your collection can't be read, formats can't be chosen: check your username and token with **Test**.
 4. Choose an **Icon**. It is shown in the settings list and in the sync progress.
@@ -253,7 +257,7 @@ Each base must have its own name. The **Add base** and **Save** buttons stay dis
 - **another base already has that name.** Capitals and extra spaces don't count, so `vinyl`, `VINYL` and `  Vinyl ` are all the same as `Vinyl`.
 - **the name is too close to another base's.** Names that differ only in punctuation or spacing, such as `Mini Disc` and `Mini-Disc`, would produce the same tag.
 - **no format is chosen**, or **a chosen format already belongs to another base**. Each format can belong to only one base.
-- **your library folder already has a folder with that name**, such as `Exports` or `Removed from collection`.
+- **your library folder already has a folder with that name**, such as `Exports` or `Removed from collection`. (Bases the plugin creates from your collection's formats, automatically or with **Set up from Discogs**, are the exception: they take over an existing folder of the format's name, so the notes already in it are found rather than duplicated.)
 - **the name contains a character that isn't allowed in file names** (`\ / : * ? " < > | # ^ [ ]`), or starts with a dot.
 - the name is empty, has no letters or numbers, or is longer than 60 characters.
 
@@ -261,7 +265,7 @@ Each base must have its own name. The **Add base** and **Save** buttons stay dis
 
 Press the delete button next to a base and confirm. The base stops syncing and disappears from the Library and the Dashboard. Its formats are listed under **Formats left out**, so a sync doesn't create the base again.
 
-Its folder and notes stay in your vault. Delete them yourself if you no longer want them. Because the folder still exists, you can't add a new base with the same name until you rename or delete it.
+Its folder and notes stay in your vault. Delete them yourself if you no longer want them. To sync it again, press **Create them again** under **Formats left out**, or use **Set up from Discogs**: the base takes its old folder back over and finds the notes already there. A base added by hand with **+** can't use a folder that already exists.
 
 You can remove every base. The Library and Dashboard then say there are no records to show. With **Create bases automatically** off, a sync then asks you to add one.
 
@@ -412,7 +416,7 @@ The **sync panel** has:
 
 - the plugin's version, and a line with the last run (for example, "✓ Last sync 2 hours ago · already up to date"),
 - buttons: **Sync from Discogs**, **Refresh prices**, **Library** (switches to the Library tab), **Export PDF**, and **Cancel** while something is running,
-- while running, a step for each base and one for the collection value, marked as active, done or failed, a progress bar and the current action,
+- while running, a step for each base and one for the collection value, marked as active, done or failed, a progress bar and the current action (bases created by the sync appear once it has read your collection),
 - **Sync log**, which expands to show everything the last run did in this session.
 
 The same panel can be added to any note with a code block:
@@ -575,7 +579,7 @@ The library folder is `Music` unless you change it in settings.
 |---|---|
 | The Music view, its Dashboard and Library tabs, charts and layout | The plugin's code |
 | Settings (including the library folder, dashboard sections and colours), bases, the last run, the collection value and its history, the last tab and the Library's last choices | `.obsidian/plugins/music-library-sync/data.json` |
-| Discogs and Genius tokens | Obsidian's secret storage on this device, encrypted by the operating system |
+| Discogs and Genius tokens | Obsidian's keychain for this vault on this device, encrypted by the operating system (Settings → Keychain) |
 
 ## 15. Upgrading from an earlier version
 
@@ -585,7 +589,7 @@ Earlier versions kept some things in your vault, always in `Music/`. From 0.11 t
 |---|---|
 | `Music/Music Dashboard.md`, which needed Dataview and Charts | The Music Dashboard view |
 | `Music/Vinyl.base`, `CDs.base`, `Tapes.base` and `All Media.base`, which needed Bases | The Music Library view |
-| `Music/.discogs-token`, `Music/.genius-token` | Tokens kept on this device, read in from the old files automatically |
+| `Music/.discogs-token`, `Music/.genius-token` | Tokens in Obsidian's keychain, read in from the old files automatically |
 | `Music/.vinyl-sync/collection-value.json`, `last-export.html` | The plugin's settings, or no longer needed |
 
 Your bases and settings carry over. The old files are left alone until you choose to remove them: **Settings → Files from earlier versions → Move to trash** (see [5.4](#54-files-from-earlier-versions)). If you had edited a `.base` file and want to keep it, leave it; Obsidian's Bases still opens it.
@@ -626,11 +630,11 @@ See [section 9](#9-prices). Fill in your Discogs Seller Settings and run **Refre
 **Sync finished "with errors"**
 Open **Sync log** on the panel. Each error names the step that failed.
 
-**The token is saved on one computer but not another**
-Tokens are kept per device. Paste them into settings on each computer you use.
+**The token is saved on one computer, or in one vault, but not another**
+Tokens are kept per vault and per device. Paste them into settings in each vault, on each computer, where you sync.
 
-**"No bases to show yet" or "No records match"**
-Add a base (see [4.4](#44-set-up-your-bases)) and run **Sync from Discogs**, or clear the Library's search.
+**"No records yet" or "No records match"**
+Run **Sync from Discogs**: it creates a base for each format in your collection and fills it. If records still don't appear, check **Formats left out** and **Create bases automatically** under **Bases**. For "No records match", clear the Library's search.
 
 **"PDF export isn't available in this version of Obsidian"**
 PDF export relies on a part of Obsidian's desktop app that some versions don't provide. Please report it with **Report a bug**, including your Obsidian version.
@@ -651,6 +655,9 @@ Yes, within their base's folder. The sync recognises notes by `discogs_instance`
 
 **Do I need other plugins, such as Dataview, Charts or Bases?**
 No. The dashboard, library and PDF export are all built into the plugin.
+
+**If I copy the plugin to another vault, do my tokens and settings go with it?**
+No. Copy `main.js`, `manifest.json` and `styles.css`, and the other vault starts fresh: tokens stay in each vault's own keychain, and settings in each vault's `data.json`. The same is true the other way round: settings and tokens you see in a vault were entered in that vault. **Settings → Reset → Start again** clears them.
 
 **Do I need to sort my records into folders on Discogs?**
 No. Records are placed by format. Discogs folders are ignored.
