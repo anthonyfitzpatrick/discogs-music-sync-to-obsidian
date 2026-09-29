@@ -269,6 +269,8 @@
   flex-direction: column;
 }
 .vinyl-record.markdown-source-view .cm-sizer > .inline-title       { order: 0; }
+/* Obsidian sets this min-height and padding-bottom as inline styles from its own code (room to
+   scroll past the end), and only !important outranks an inline style; a more specific selector can't. */
 .vinyl-record.markdown-source-view .cm-sizer > .cm-contentContainer {
   order: 1;
   flex: 0 0 auto;          /* only as tall as the text needs */
@@ -288,7 +290,6 @@
    record opened in reading view showed only its last heading, "Notes". */
 
 /* Keep the Notes heading compact when the section is empty */
-.vinyl-record .markdown-preview-sizer > div:has(> h2[data-heading="Notes"]):last-of-type h2,
 .vinyl-record h2[data-heading="Notes"] { margin-bottom: 0.25em; }
 
 /* v0.11: the Music Dashboard and Music Library views */

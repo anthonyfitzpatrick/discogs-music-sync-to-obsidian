@@ -4,9 +4,6 @@
    Safety: never overwrites an existing album note (except price fields on "Refresh prices").
    Assumes nothing about the vault: every folder comes from the settings. */
 import { Plugin, PluginSettingTab, Notice, requestUrl, setIcon, moment, Modal, Setting, normalizePath } from "obsidian";
-import * as fs from "fs";
-import * as os from "os";
-import * as path from "path";
 
 // The library folder a new install starts with; the user can choose another in settings.
 const DEFAULT_FOLDER = "Music";
@@ -22,7 +19,7 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
 import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat } from "./bases.js";
@@ -1011,13 +1008,17 @@ class MusicLibrarySync extends Plugin {
       // the report's rules are in the plugin's styles.css, which the page embeds
       const css = await this.app.vault.adapter.read(`${this.manifest.dir}/styles.css`).catch(() => "");
       const html = buildReport(await this.collectRecords(), this.data.libraries.map((l) => l.name), value, theme, stamp, { ...this.reportOptions(), css });
-      const tmp = path.join(os.tmpdir(), `music-dashboard-export-${Date.now()}.html`);
-      fs.writeFileSync(tmp, html, "utf8");
+      // The page is written to the plugin's own folder through the vault adapter, so the plugin never
+      // touches the file system outside the vault; the print window loads it from there.
+      const adapter = this.app.vault.adapter;
+      if (typeof adapter.getFullPath !== "function") throw new Error("PDF export needs Obsidian's desktop app");
+      const tmp = `${this.manifest.dir}/.export-${Date.now()}.html`;
+      await adapter.write(tmp, html);
       const [w, h] = PAPER[size] || PAPER.A4;
       const printableW = Math.round(((orientation === "landscape" ? h : w) - 2 * MARGIN) * 96);
       const win = new remote.BrowserWindow({ show: false, width: printableW, height: 1200, webPreferences: { offscreen: false } });
       try {
-        await win.loadFile(tmp);
+        await win.loadFile(adapter.getFullPath(tmp));
         // the footer is rendered in isolation, without the page's CSS, so it gets the resolved colour
         const footer = `<div style="font-size:8px;width:100%;padding:0 ${MARGIN}in;color:${theme.muted};display:flex;justify-content:space-between;font-family:sans-serif">
           <span>Music Dashboard · ${stamp}</span><span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>`;
@@ -1035,7 +1036,7 @@ class MusicLibrarySync extends Plugin {
         new Notice(`PDF saved: ${out}`, 8000);
         try { this.app.openWithDefaultApp(out); }   // the notice above already gives the path
         catch (e) { console.warn("Discogs music sync: couldn't open the PDF viewer", e); }
-      } finally { win.destroy(); try { fs.unlinkSync(tmp); } catch { /* a leftover file in the system temp folder is harmless */ } }
+      } finally { win.destroy(); await adapter.remove(tmp).catch(() => { /* a leftover page in the plugin folder is harmless */ }); }
     } finally { notice.hide(); }
   }
 

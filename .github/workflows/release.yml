@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write       # signs the build attestation
+  attestations: write   # stores it, so users can check the files were built from this repo
 
 jobs:
   release:
@@ -31,6 +33,14 @@ jobs:
           node -e "if (!require('./versions.json')[process.argv[1]]) { console.error('versions.json has no entry for ' + process.argv[1]); process.exit(1) }" "$GITHUB_REF_NAME"
 
       - run: npm test
+
+      - name: Attest the release files
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
 
       - name: Publish the release
         env:

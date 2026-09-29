@@ -1,6 +1,6 @@
 {
   "name": "discogs-music-sync-to-obsidian",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Discogs music sync and dashboard: an Obsidian plugin that syncs a Discogs collection into album notes, bases and a Music Dashboard.",
   "private": true,
   "license": "MIT",

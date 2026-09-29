@@ -7,3 +7,6 @@ data.json
 node_modules/
 .DS_Store
 Icon?
+
+# a PDF export page left behind if Obsidian closes mid-export
+.export-*.html
