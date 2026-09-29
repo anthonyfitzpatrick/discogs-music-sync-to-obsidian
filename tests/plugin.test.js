@@ -260,6 +260,42 @@ test("a sync places every record by its format, wherever it is in the collection
   assert.ok(log.some((l) => /1 record with the format Cassette has no base/.test(l)), "a format with no base is reported, not guessed");
 });
 
+test("a sync on a new install creates a base for each format and fills it; one the user stops syncing stays gone", async () => {
+  const v = await makePlugin({ username: "someone" });
+  const { p, app } = v;
+  const collection = [item(1, ["Vinyl"]), item(2, ["CD"]), item(3, ["Box Set", "Vinyl"]), item(4, ["Cassette"])];
+  const sync = async () => {
+    const { eng, log } = makeEngine(v, structuredClone(p.data.libraries), collection);
+    eng.cfg.createBases = (items) => p.createBasesFor(items);
+    return { made: await eng.syncAll(), eng, log };
+  };
+  const first = await sync();
+  assert.deepStrictEqual(p.data.libraries.map((l) => [l.name, l.formats, l.dir]),
+    [["Vinyl", ["Vinyl"], "Music/Vinyl"], ["Cassette", ["Cassette"], "Music/Cassette"], ["CD", ["CD"], "Music/CD"]], "named after the formats, most records first; the box set goes to Vinyl");
+  assert.strictEqual(first.made, 4, "every record got a note in the same sync");
+  assert.strictEqual(first.eng.unplaced, 0);
+  assert.ok(first.log.some((l) => /New base Vinyl for Vinyl records → Music\/Vinyl/.test(l)));
+
+  await p.removeLibrary(p.data.libraries.find((l) => l.name === "Cassette"));
+  assert.deepStrictEqual(p.data.skippedFormats, ["Cassette"]);
+  const second = await sync();
+  assert.ok(!p.data.libraries.some((l) => l.name === "Cassette"), "not created again");
+  assert.strictEqual(second.eng.unplaced, 1, "its record is reported instead");
+
+  p.data.autoBases = false;
+  await p.removeLibrary(p.data.libraries.find((l) => l.name === "CD"));
+  p.unskip(["CD"]);
+  await sync();
+  assert.ok(!p.data.libraries.some((l) => l.name === "CD"), "with the setting off, no base is created");
+  assert.ok(app.vault.getAbstractFileByPath("Music/Vinyl"));
+});
+
+test("adding a base by hand for a left-out format brings it back into the sync", async () => {
+  const { p } = await makePlugin({ username: "someone", skippedFormats: ["Cassette", "CD"] });
+  await p.addLibrary({ name: "Tapes", formats: ["cassette"] });
+  assert.deepStrictEqual(p.data.skippedFormats, ["CD"]);
+});
+
 test("a note in the wrong base is moved to the right one and retagged, keeping what the user wrote", async () => {
   const vault = makeVault({ "Music/Vinyl/Misfiled.md": noteFor(5, "vinyl-library", "Bought at a fair.") });
   const { eng, log } = makeEngine(vault, [VINYL, CDS], [item(5, ["CD"])]);

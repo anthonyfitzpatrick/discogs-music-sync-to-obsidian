@@ -47,6 +47,24 @@ function baseFor(formats, libs) {
   return null;
 }
 
+// Discogs' wrappers around the media inside them: a box set of LPs is listed "Box Set; 4x Vinyl".
+const CONTAINERS = new Set(["box set", "all media"]);
+
+// The formats that need a base of their own so that every record has a place, most records first.
+// For each record no base takes: its first format that isn't a wrapper (a wrapper only when that is
+// all it has), unless the user stopped syncing that format.
+function basesNeeded(items, libs, skipped = []) {
+  const counts = new Map();
+  for (const item of items) {
+    if (baseFor(item.formats, libs)) continue;
+    const f = item.formats.find((x) => !CONTAINERS.has(tidy(x).toLowerCase())) ?? item.formats[0];
+    if (!f || skipped.some((x) => sameFormat(x, f))) continue;
+    const key = [...counts.keys()].find((k) => sameFormat(k, f)) ?? tidy(f);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([f]) => f);
+}
+
 // How many records include each format, most common first: what Set up and the base dialog offer.
 function formatCounts(items) {
   const counts = new Map();
@@ -54,4 +72,4 @@ function formatCounts(items) {
   return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }
 
-export { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts };
+export { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat, CONTAINERS };

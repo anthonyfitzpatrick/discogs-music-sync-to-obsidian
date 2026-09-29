@@ -1,7 +1,7 @@
 // Tests the pure logic in src/bases.js and src/discogs.js directly: no Obsidian stand-in needed.
 const { test } = require("node:test");
 const assert = require("node:assert");
-const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } = require("../src/bases.js");
+const { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded } = require("../src/bases.js");
 const { decodeCollectionPage, decodeIdentity } = require("../src/discogs.js");
 
 const vinyl = { id: "vinyl", name: "Vinyl", formats: ["Vinyl"], tag: "vinyl-library" };
@@ -74,4 +74,12 @@ test("collection pages are decoded, or rejected with a reason", () => {
 test("Discogs identities are decoded, or rejected with a reason", () => {
   assert.strictEqual(decodeIdentity({ id: 1, username: "someone" }), "someone");
   for (const bad of [{}, { username: "" }, { username: 42 }, null]) assert.throws(() => decodeIdentity(bad), /which account/);
+});
+
+test("the bases a collection needs are its formats that no base takes, box sets by what's inside", () => {
+  const items = [["Vinyl"], ["Vinyl"], ["CD"], ["Box Set", "Vinyl"], ["All Media", "CD", "DVD"], ["Cassette"], ["Box Set"], ["vinyl"]].map((formats) => ({ formats }));
+  assert.deepStrictEqual(basesNeeded(items, []), ["Vinyl", "CD", "Box Set", "Cassette"], "most records first; a bare box set keeps its wrapper; spellings merged");
+  assert.deepStrictEqual(basesNeeded(items, [vinyl]), ["CD", "Box Set", "Cassette"], "records a base already takes need nothing");
+  assert.deepStrictEqual(basesNeeded(items, [vinyl, cds], ["cassette"]), ["Box Set"], "a format the user stopped syncing is left out");
+  assert.deepStrictEqual(basesNeeded([], []), []);
 });

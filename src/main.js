@@ -22,10 +22,10 @@ const folderProblem = (v) => {
   if (f.split("/").some((part) => part.startsWith(".") || /[\\:*?"<>|#^[\]]/.test(part))) return "Use a folder name without \\ : * ? \" < > | # ^ [ ], not starting with a dot.";
   return "";
 };
-const VERSION = "0.13.2";
+const VERSION = "0.14.0";
 const UA = `Wolf359DiscogsMusicSync/${VERSION}`;
 // Pure logic, testable without Obsidian: names, tags, icons, naming rules, placement by format.
-import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts } from "./bases.js";
+import { tidy, slug, guessIcon, nameProblem, baseFor, formatCounts, basesNeeded, sameFormat } from "./bases.js";
 // Decoders for Discogs responses, applied where the responses arrive.
 import { decodeCollectionPage, decodeIdentity } from "./discogs.js";
 // The dashboard as a standalone page for PDF export, built without Dataview or Charts.
@@ -45,6 +45,8 @@ const DEFAULTS = { last: null, username: "", folder: DEFAULT_FOLDER, lyrics: tru
   legacyFiles: [],                               // files earlier versions made, offered for removal in settings
   valueHistory: [],                              // Discogs' value of the collection, one entry per day it was fetched
   sections: {},                                  // dashboard sections turned off: { key: false }
+  autoBases: true,                               // a sync creates a base for each format that has none
+  skippedFormats: [],                            // formats whose base the user stopped syncing: not created again
   colours: { mode: "theme", bases: {}, accent: DEFAULT_ACCENT } };   // bases: colour per base id, for Custom
 // Files versions before 0.11 kept in the vault, which the plugin no longer uses. Those versions always
 // used a folder called Music, so only there. Offered for removal in settings, never removed without
@@ -262,6 +264,12 @@ class Engine {
     const libs = this.cfg.libraries;
     this.log("Reading your Discogs collection…");
     const items = await this.collection();
+    // 0. a base, named after the format, for each format no base takes yet (when the plugin creates them)
+    if (this.cfg.createBases) {
+      const { added, skipped } = await this.cfg.createBases(items);
+      for (const lib of added) { libs.push(lib); this.log(`+ New base ${lib.name} for ${lib.formats.join(", ")} records → ${lib.dir}`); }
+      for (const why of skipped) this.log(`⚠ No base created for ${why}`);
+    }
     const fieldMap = Object.fromEntries(((await this.discogs(`users/${this.cfg.username}/collection/fields`)).fields || []).map((x) => [x.id, x.name]));
 
     // 1. every record goes to the base that takes its format; the rest are reported, never guessed
@@ -487,6 +495,7 @@ class MusicLibrarySync extends Plugin {
     const saved = await this.loadData();
     this.data = Object.assign(structuredClone(DEFAULTS), saved);
     if (!Array.isArray(this.data.libraries)) this.data.libraries = [];
+    if (!Array.isArray(this.data.skippedFormats)) this.data.skippedFormats = [];
     this.data.folder = cleanFolder(this.data.folder) || DEFAULT_FOLDER;
     // Before 0.10 a base synced a Discogs folder. The folders were named after their formats (Vinyl,
     // CD, Cassette), which are Discogs' own spellings, so each becomes the format its base takes.
@@ -583,6 +592,7 @@ class MusicLibrarySync extends Plugin {
     const lib = { id, name, formats: [...v.formats], dir: `${this.data.folder}/${name}`, tag: `${s}-library`, icon: v.icon || "disc-3" };
     await this.ensureLibraryFiles(lib);
     this.data.libraries.push(lib);
+    this.unskip(lib.formats);
     await this.save();
     return lib;
   }
@@ -594,6 +604,7 @@ class MusicLibrarySync extends Plugin {
     lib.name = tidy(v.name);
     lib.formats = [...v.formats];
     lib.icon = v.icon || lib.icon;
+    this.unskip(lib.formats);
     await this.save();
   }
 
@@ -617,9 +628,21 @@ class MusicLibrarySync extends Plugin {
   }
 
   // Stops syncing a base. Its folder and notes are left in the vault.
+  // Its formats are remembered, so a sync doesn't create the base again.
   async removeLibrary(lib) {
     this.data.libraries = this.data.libraries.filter((l) => l !== lib);
+    for (const f of lib.formats) if (!this.data.skippedFormats.some((x) => sameFormat(x, f))) this.data.skippedFormats.push(f);
     await this.save();
+  }
+  // A format given a base again, by hand, is no longer left out.
+  unskip(formats) { this.data.skippedFormats = this.data.skippedFormats.filter((x) => !formats.some((f) => sameFormat(f, x))); }
+
+  // During a sync: a base, named after the format, for each format in the collection that no base
+  // takes, so a new install needs no setting up. Formats the user stopped syncing are left out.
+  async createBasesFor(items) {
+    if (!this.data.autoBases) return { added: [], skipped: [] };
+    const { added, skipped } = await this.addFromDiscogs(basesNeeded(items, this.data.libraries, this.data.skippedFormats));
+    return { added: structuredClone(added), skipped };
   }
 
   /* ---- Discogs / Genius helpers for the settings page ---- */
@@ -816,7 +839,7 @@ class MusicLibrarySync extends Plugin {
     const s = this.state;
     if (s.running) { new Notice("Music sync is already running"); return; }
     const need = !this.data.username ? "Enter your Discogs username" : !this.token("discogs") ? "Save your Discogs token" :
-      mode !== "dashboard" && !this.data.libraries.length ? "Add a base" : "";
+      mode !== "dashboard" && !this.data.libraries.length && !(mode === "sync" && this.data.autoBases) ? "Add a base" : "";
     if (need) { new Notice(`${need} in Settings → Discogs music sync and dashboard first.`, 8000); return; }
     const libs = structuredClone(this.data.libraries);
     if (mode === "sync") for (const lib of libs) { try { await this.ensureLibraryFiles(lib); } catch (e) { console.error(e); } }
@@ -827,9 +850,10 @@ class MusicLibrarySync extends Plugin {
     const log = (l) => { lines.push(l); s.log = lines.slice(-400).join("\n"); s.now = l.trim(); this.refresh(); };
     const d = this.data;
     const eng = new Engine(vaultFiles(this.app), log, () => this.cancelled, { username: d.username, lyrics: d.lyrics, gallery: d.gallery, libraries: libs,
-      discogsToken: this.token("discogs"), geniusToken: this.token("genius"), folder: d.folder });
+      discogsToken: this.token("discogs"), geniusToken: this.token("genius"), folder: d.folder,
+      createBases: async (items) => { const r = await this.createBasesFor(items); s.stepList = this.steps(); this.refresh(); return r; } });
     const steps = mode === "dashboard" ? [] : libs;
-    const work = steps.length + 1;
+    const work = () => steps.length + 1;                     // bases a sync creates add steps
     let failed = false, created = 0, priced = 0;
     this.refresh();
     try {
@@ -839,20 +863,20 @@ class MusicLibrarySync extends Plugin {
           created = await eng.syncAll((lib, i, done, total) => {
             libs.slice(0, i).forEach((l) => { s.steps[l.id] = "done"; });
             s.steps[lib.id] = done >= total ? "done" : "active";
-            s.progress = (i + (total ? done / total : 1)) / work; this.refresh();
+            s.progress = (i + (total ? done / total : 1)) / work(); this.refresh();
           });
         } catch (e) { failed = true; for (const l of libs) if (s.steps[l.id] !== "done") s.steps[l.id] = "error"; log(`ERROR: ${e.message}`); console.error(e); }
       }
       for (let i = 0; mode === "prices" && i < steps.length && !this.cancelled; i++) {
         const st = steps[i];
-        s.steps[st.id] = "active"; s.progress = i / work; this.refresh();
-        const prog = (done, total) => { s.progress = (i + (total ? done / total : 1)) / work; this.refresh(); };
+        s.steps[st.id] = "active"; s.progress = i / work(); this.refresh();
+        const prog = (done, total) => { s.progress = (i + (total ? done / total : 1)) / work(); this.refresh(); };
         try {
           priced += await eng.refreshPrices(st, prog);
           s.steps[st.id] = "done";
         } catch (e) { failed = true; s.steps[st.id] = "error"; log(`ERROR (${st.name}): ${e.message}`); console.error(e); }
       }
-      s.steps.dashboard = "active"; s.progress = steps.length / work; this.refresh();
+      s.steps.dashboard = "active"; s.progress = steps.length / work(); this.refresh();
       try {
         this.data.value = await eng.collectionValue();
         // one entry per day, for the value-over-time chart; a later fetch the same day replaces it
@@ -1030,17 +1054,26 @@ class MusicSettingTab extends PluginSettingTab {
           render: (s) => this.tokenRow(s, "genius", "Genius", async () => { await P.geniusCheck(); return "Genius accepted the token"; }) },
       ] },
       { type: "group", heading: "Bases", items: [
-        { name: "Set up from Discogs", aliases: ["Add bases", "Formats"],
-          desc: "Each base takes the records of the formats you choose, from anywhere in your Discogs collection, into its own folder, with its own place in the library and on the dashboard. Choose formats from your collection to add as bases; names must be unique.",
+        { name: "Create bases automatically", aliases: ["Formats", "Add bases"],
+          desc: "Each base takes the records of one Discogs format, such as Vinyl or CD, into its own folder, with its own place in the library and on the dashboard. When on, a sync creates a base, named after the format, for every format in your collection that has none. A box set goes by the media inside it.",
+          control: { type: "toggle", key: "autoBases" } },
+        { name: "Formats left out", searchable: false, visible: () => d.skippedFormats.length > 0,
+          desc: "You stopped syncing these, so no base is created for them.",
+          render: (s) => {
+            s.descEl.createDiv({ text: d.skippedFormats.join(", ") });
+            s.addButton((b) => b.setButtonText("Create them again").onClick(async () => { d.skippedFormats = []; await P.save(); redraw(); }));
+          } },
+        { name: "Set up from Discogs", aliases: ["Add bases"],
+          desc: "Choose which formats in your collection get a base now, instead of waiting for the next sync. Names must be unique.",
           disabled: () => !ready(), action: () => new SetupModal(this.app, P, redraw).open() },
       ] },
       // Removing a base asks first: its notes stay, but it leaves the sync, the library and the dashboard.
-      { type: "list", emptyState: "No bases yet.",
+      { type: "list", emptyState: "No bases yet. The next sync creates them from your collection's formats.",
         addItem: { name: "Add base", action: () => new LibraryModal(this.app, P, null, redraw).open() },
         onDelete: (i) => {
           const lib = d.libraries[i]; if (!lib) return;
           new ConfirmModal(this.app, `Stop syncing “${lib.name}”?`,
-            `It disappears from the sync, the library and the dashboard. ${lib.dir} and its notes stay in your vault — delete them yourself if you no longer want them.`,
+            `It disappears from the sync, the library and the dashboard, and isn't created again automatically. ${lib.dir} and its notes stay in your vault — delete them yourself if you no longer want them.`,
             "Stop syncing", async () => { await P.removeLibrary(lib); redraw(); }).open();
         },
         items: d.libraries.map((lib) => ({ name: lib.name, desc: `Takes ${lib.formats.join(", ")} records → ${lib.dir} · #${lib.tag}`,
@@ -1095,6 +1128,7 @@ class MusicSettingTab extends PluginSettingTab {
       case "username": return d.username;
       case "lyrics": return d.lyrics;
       case "gallery": return d.gallery;
+      case "autoBases": return d.autoBases;
       case "colourMode": return d.colours.mode;
       case "accent": return d.colours.accent;
       case "pdfSize": return d.pdf.size;
@@ -1112,6 +1146,7 @@ class MusicSettingTab extends PluginSettingTab {
       case "username": d.username = String(value).trim(); P.formatCache = null; break;
       case "lyrics": d.lyrics = value === true; break;
       case "gallery": d.gallery = value === true; break;
+      case "autoBases": d.autoBases = value === true; break;
       case "colourMode": d.colours.mode = COLOUR_MODES[value] ? value : "theme"; break;
       case "accent": d.colours.accent = String(value); break;
       case "pdfSize": d.pdf.size = PAPER[value] ? value : "A4"; break;
@@ -1140,8 +1175,8 @@ class MusicSettingTab extends PluginSettingTab {
     const ol = g.createEl("ol");
     for (const [t, done] of [
       ["Enter your Discogs username and paste a personal access token below, then press Test.", !!d.username && !!P.token("discogs")],
-      ["Under Bases, press “Set up from Discogs” and tick the formats to sync, such as Vinyl and CD.", d.libraries.length > 0],
-      ["Run “Sync from Discogs” from the command palette, then press the disc icon in the ribbon to open the dashboard.", false],
+      ["Run “Sync from Discogs” from the command palette. It creates a base for each format in your collection, such as Vinyl and CD, and fills them.", d.libraries.length > 0],
+      ["Press the disc icon in the ribbon to open the dashboard and library.", false],
     ]) ol.createEl("li", { text: t, cls: done ? "is-done" : "" });
   }
 

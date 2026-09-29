@@ -2,6 +2,7 @@
 // the PDF export. It needs no other plugin: records are decoded here from each note's frontmatter and
 // tracklist, the figures are computed here, and the charts are drawn here. Nothing in this file
 // touches Obsidian, so it is tested directly.
+import { CONTAINERS } from "./bases.js";
 
 /* ------------------------------------------------------------------ decoding */
 
@@ -23,8 +24,6 @@ function tracklist(body) {
   return { tracks: rows.length, secs };
 }
 
-// Discogs' wrappers around the media inside them: a box set of LPs is listed "Box Set; 4x Vinyl".
-const CONTAINERS = new Set(["box set", "all media"]);
 // A record's format, as Discogs reports it: the first in its format property ("1x Box Set,
 // Compilation; 4x Vinyl, LP") that isn't a wrapper, else its media property, else "Unknown".
 function primaryFormat(format, media) {

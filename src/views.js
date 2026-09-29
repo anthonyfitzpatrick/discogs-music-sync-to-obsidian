@@ -157,7 +157,7 @@ class LibraryPane {
     const total = new Set(groups.flatMap((g) => g.records.map((r) => r.path))).size;
     this.countEl.setText(`${total} record${total === 1 ? "" : "s"}`);
     this.listEl.empty();
-    if (!names.length) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No bases yet. Add one in this plugin's settings, then sync from Discogs." }); return; }
+    if (!names.length) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No records yet. Sync from Discogs: it creates a base for each format in your collection." }); return; }
     if (!total) { this.listEl.createEl("p", { cls: "mls-library-empty", text: "No records match." }); return; }
     const view = VIEWS[state.view] || VIEWS.gallery;
     this.sizeSelect.parentElement.toggle(!!view.cards);

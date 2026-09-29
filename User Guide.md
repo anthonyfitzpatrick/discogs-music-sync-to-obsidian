@@ -117,11 +117,15 @@ Tokens are kept by the plugin on this device, not in a file (see [section 16](#1
 
 Every record on Discogs has a format, such as Vinyl, CD or Cassette. The plugin puts each record in the base for its format, automatically: you don't have to sort your collection into folders on Discogs.
 
+**You don't need to do anything here.** The first sync reads the formats in your collection and creates a base for each one, then fills them in the same run. A box set goes by the media inside it, so a box set of LPs goes to Vinyl. Later syncs do the same for any format new to your collection. Turn this off with **Create bases automatically** (see [5.3](#53-bases)).
+
+To choose the bases yourself before the first sync:
+
 1. Under **Bases**, press **Set up from Discogs**. The button works once your username and token are saved.
 2. The dialog reads your collection and lists every format in it, with how many records have each. All are ticked; untick any you don't want.
 3. Press **Add bases**.
 
-Each ticked format becomes a base with the format's name, for example `Vinyl` becomes the folder `Music/Vinyl/` (in your library folder, see [5.1](#51-library-folder-and-discogs)) and the tag `#vinyl-library`, with an icon to match. You can rename bases afterwards (see [6.3](#63-editing-and-renaming-a-base)), or add more with **Add base** (see [6.2](#62-adding-a-base)).
+Each format becomes a base with the format's name, for example `Vinyl` becomes the folder `Music/Vinyl/` (in your library folder, see [5.1](#51-library-folder-and-discogs)) and the tag `#vinyl-library`, with an icon to match. You can rename bases afterwards (see [6.3](#63-editing-and-renaming-a-base)), or add more with **Add base** (see [6.2](#62-adding-a-base)).
 
 ### 4.5 Run the first sync
 
@@ -153,7 +157,9 @@ Open **Settings → Discogs music sync and dashboard**. Changes are saved as you
 
 ### 5.3 Bases
 
-**Set up from Discogs** adds bases for formats in your collection that don't have one yet. It is greyed out until a username and token are saved.
+- **Create bases automatically** (on unless you turn it off): each sync creates a base, named after the format, for every format in your collection that has none.
+- **Formats left out**: shown when you have stopped syncing a base. Its formats are listed here and no base is created for them automatically. **Create them again** lets the next sync recreate them.
+- **Set up from Discogs** adds bases for formats in your collection that don't have one yet, choosing them yourself instead of waiting for a sync. It is greyed out until a username and token are saved.
 
 Below it, the list shows every base with its icon, name, formats, folder and tag.
 
@@ -209,7 +215,7 @@ A base takes every record of the formats you choose, from anywhere in your Disco
 - Formats are **chosen from the formats in your collection, never typed**, so a misspelling can't send records nowhere.
 - Each format belongs to **one base only**.
 - A record with several formats goes to the base of the **first** of them that has one, in the order Discogs lists them. A box set listed as *Box Set, Vinyl* goes to your Vinyl base, unless you have a base for Box Set.
-- A record whose formats have **no base** isn't synced, and every sync says so in the log and the summary, so nothing is left out without you knowing.
+- A format with no base gets one at the next sync, named after it (see [4.4](#44-set-up-your-bases)). A record is left unsynced only when you have stopped syncing its format or turned automatic bases off, and every sync says so in the log and the summary, so nothing is left out without you knowing.
 
 ### 6.2 Adding a base
 
@@ -245,11 +251,11 @@ Each base must have its own name. The **Add base** and **Save** buttons stay dis
 
 ### 6.5 Removing a base
 
-Press the bin next to a base and confirm. The base stops syncing and disappears from the Library and the Dashboard.
+Press the delete button next to a base and confirm. The base stops syncing and disappears from the Library and the Dashboard. Its formats are listed under **Formats left out**, so a sync doesn't create the base again.
 
 Its folder and notes stay in your vault. Delete them yourself if you no longer want them. Because the folder still exists, you can't add a new base with the same name until you rename or delete it.
 
-You can remove every base. The Library and Dashboard then say there are no bases to show, and a sync asks you to add one.
+You can remove every base. The Library and Dashboard then say there are no records to show. With **Create bases automatically** off, a sync then asks you to add one.
 
 ## 7. Syncing from Discogs
 
@@ -258,7 +264,7 @@ Start a sync with the **Sync from Discogs** command, or the **Sync from Discogs*
 A sync:
 
 1. reads your whole Discogs collection, every folder and every page,
-2. puts each record in the base for its format (see [6.1](#61-what-a-base-is)), and reports records whose format has no base, and bases whose formats no record has,
+2. creates a base for each format that has none (see [4.4](#44-set-up-your-bases)), puts each record in the base for its format (see [6.1](#61-what-a-base-is)), and reports records left without a base, and bases whose formats no record has,
 3. finds every existing record note, in every base, matching on each note's `discogs_instance`,
 4. moves notes of records that have left your collection (see [7.2](#72-records-you-remove-from-discogs)),
 5. moves notes that are in the wrong base, for example after you change a base's formats (see [7.3](#73-records-in-the-wrong-base)),
@@ -592,7 +598,7 @@ Setup isn't finished. Open **Settings → Discogs music sync and dashboard** and
 Shown by **Set up from Discogs** and the base dialog. Check your username and token with **Test**, then try again.
 
 **"⚠ N records with the format … have no base"**
-Those records aren't synced. Add a base for that format with **Set up from Discogs** or **Add base**, or add the format to an existing base.
+Those records aren't synced, because you stopped syncing their format or turned **Create bases automatically** off. Press **Create them again** under **Formats left out**, add a base with **Set up from Discogs** or **Add base**, or add the format to an existing base.
 
 **"⚠ <base>: no record in your collection has the format …"**
 Nothing in your collection has that base's formats right now. Nothing is wrong if you haven't bought one yet; otherwise, edit the base and choose the right formats from the list.

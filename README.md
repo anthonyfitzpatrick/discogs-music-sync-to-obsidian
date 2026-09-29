@@ -36,9 +36,8 @@ No other plugin is needed.
 
 1. Open **Settings → Discogs music sync and dashboard**. Optionally choose the **Library folder** (`Music` unless you change it).
 2. Enter your Discogs username, paste your personal access token and press **Test**.
-3. Under **Bases**, press **Set up from Discogs** and tick the formats to sync.
-4. Press the disc icon in the ribbon to open **Music**, and press **Sync from Discogs**.
-5. Switch between the **Dashboard** and **Library** tabs to see your collection.
+3. Press the disc icon in the ribbon to open **Music**, and press **Sync from Discogs**. The sync creates a base for each format in your collection (Vinyl, CD, Cassette…) and fills it.
+4. Switch between the **Dashboard** and **Library** tabs to see your collection.
 
 The [User Guide](User%20Guide.md) covers every feature and setting in detail.
 
