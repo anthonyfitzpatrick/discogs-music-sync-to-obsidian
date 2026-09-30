@@ -2,6 +2,8 @@
 
 An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, with a Music Dashboard and a Music Library built in. It needs no other plugin, and puts nothing in your vault except your record notes, their images and the PDFs you export.
 
+It is in Obsidian's community plugins: **[Discogs music sync and dashboard](https://community.obsidian.md/plugins/discogs-music-sync)**.
+
 The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its folder in `.obsidian/plugins/`, is `discogs-music-sync`.
 
 ![The dashboard: overview, value spread and the most valuable albums](docs/images/dashboard.png)
@@ -40,9 +42,11 @@ No other plugin is needed.
 
 ## Installation
 
+**From Obsidian** (recommended). Open **Settings → Community plugins → Browse**, search for **Discogs music sync**, then choose **Install** and **Enable**. Or open [its page in the community plugins](https://community.obsidian.md/plugins/discogs-music-sync) and install it from there. Obsidian keeps it up to date.
+
 **From a release.** Download `main.js`, `manifest.json` and `styles.css` from the [latest release](https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian/releases/latest), put them in `<your vault>/.obsidian/plugins/discogs-music-sync/`, then enable **Discogs music sync and dashboard** in **Settings → Community plugins**.
 
-**With BRAT** (for beta testing). Install the BRAT community plugin, choose **Add beta plugin**, and enter `anthonyfitzpatrick/discogs-music-sync-to-obsidian`. BRAT installs the latest release and keeps it updated.
+**With BRAT** (to try a version before it reaches the community plugins). Install the BRAT community plugin, choose **Add beta plugin**, and enter `anthonyfitzpatrick/discogs-music-sync-to-obsidian`. BRAT installs the latest release and keeps it updated.
 
 ## Quick start
 

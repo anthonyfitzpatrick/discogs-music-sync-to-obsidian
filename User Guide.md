@@ -68,7 +68,15 @@ No other plugin is needed.
 
 ## 3. Installation
 
-### 3.1 From a release
+### 3.1 From Obsidian's community plugins
+
+This is the easiest way, and Obsidian keeps the plugin up to date.
+
+1. Open **Settings → Community plugins**. If Restricted mode is on, turn it off.
+2. Choose **Browse**, search for **Discogs music sync**, and open **Discogs music sync and dashboard**. (Or open [its page in the community plugins](https://community.obsidian.md/plugins/discogs-music-sync).)
+3. Choose **Install**, then **Enable**.
+
+### 3.2 From a release
 
 1. Open the [latest release](https://github.com/anthonyfitzpatrick/discogs-music-sync-to-obsidian/releases/latest) and download `main.js`, `manifest.json` and `styles.css`.
 2. Create the folder `<your vault>/.obsidian/plugins/discogs-music-sync/` and put the three files in it.
@@ -77,9 +85,9 @@ No other plugin is needed.
 
 To update, replace the three files with those from the newer release and turn the plugin off and on again (or restart Obsidian). Your settings and tokens are kept: they aren't in these files (see [section 14](#14-what-the-plugin-keeps-where)).
 
-### 3.2 With BRAT
+### 3.3 With BRAT
 
-BRAT is a community plugin for installing plugins that aren't in the community list yet, and keeping them updated.
+BRAT is a community plugin for trying a plugin's newest release before it reaches the community plugins, and keeping it updated.
 
 1. Install and enable **BRAT** from **Settings → Community plugins → Browse**.
 2. Run **BRAT: Add a beta plugin for testing** from the command palette.
