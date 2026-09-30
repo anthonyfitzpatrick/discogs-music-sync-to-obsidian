@@ -269,13 +269,14 @@
   flex-direction: column;
 }
 .vinyl-record.markdown-source-view .cm-sizer > .inline-title       { order: 0; }
-/* Obsidian sets this min-height and padding-bottom as inline styles from its own code (room to
-   scroll past the end), and only !important outranks an inline style; a more specific selector can't. */
 .vinyl-record.markdown-source-view .cm-sizer > .cm-contentContainer {
   order: 1;
   flex: 0 0 auto;          /* only as tall as the text needs */
-  min-height: 0 !important;
+  min-height: 0;
 }
+/* Obsidian sets this padding (room to scroll past the end) as an inline style from its own code, and
+   only !important outranks an inline style; a more specific selector can't. Without it the properties
+   would sit half a screen below the tracklist. */
 .vinyl-record.markdown-source-view .cm-content { padding-bottom: 0 !important; }
 .vinyl-record.markdown-source-view .cm-sizer > .metadata-container  {
   order: 2;
