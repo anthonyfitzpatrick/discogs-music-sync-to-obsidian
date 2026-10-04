@@ -2,7 +2,7 @@
 
 An Obsidian plugin that turns your Discogs collection into a music library in your vault: one note per record, with a Music Dashboard and a Music Library built in. It needs no other plugin, and puts nothing in your vault except your record notes, their images and the PDFs you export.
 
-It is in Obsidian's community plugins: **[Discogs music sync and dashboard](https://community.obsidian.md/plugins/discogs-music-sync)**.
+It is in Obsidian's community plugins: **[Discogs music sync and dashboard](https://community.obsidian.md/plugins/discogs-music-sync)**. Its product page is on [wolf359.app](https://wolf359.app/discogs-music-sync/), with the other plugins and themes from Wolf 359 Press AB.
 
 The repository is *Discogs Music Sync to Obsidian*. The plugin's ID, and its folder in `.obsidian/plugins/`, is `discogs-music-sync`.
 
